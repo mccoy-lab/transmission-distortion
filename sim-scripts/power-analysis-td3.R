@@ -46,6 +46,7 @@ ggplot(data = full_list, aes(x = i, y = power,  color = factor(j))) +
   scale_color_manual(values = unname(palette.colors(11, "Alphabet")), name = "Transmission bias")
 
 
+
 # info about -- mean(my_reps < alpha)
 # calculate the power of your analysis by checking the proportion of your simulated analyses that have a p-value 
 # less than your alpha (the probability of rejecting the null hypothesis when the null hypothesis is true)
