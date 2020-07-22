@@ -6,6 +6,7 @@ library(ggplot2)
 # simulate data using rbinom() with different amounts of transmission distortion, and then see if you can detect it using a binomial test, while varying the sample size of sperm
 # e.g., https://psyteachr.github.io/msc-data-skills/sim.html#binomial, and the function `sim_binomial_test` for an example of how to do this
 
+set.seed(5)
 sim_binom_test <- function(n, bias, p = 0.5) {
   # simulate 1 coin flip n times with the specified bias
   coin <- rbinom(1, n, bias)
