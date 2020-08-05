@@ -1,0 +1,74 @@
+
+## Following pipeline from Bell et al. 2020 supplementary materials and methods (Bulk sequence data processing - line 275)
+# Finished: SRR10140422 (individual 22)
+# in progress: SRR10140430 (individual 10)
+
+## Data loading and formatting 
+
+# Prefetch data
+/Users/saracarioscia/grad-school/sra-data$ prefetch --max-size 300000000 --ngc ../../Downloads/prj_25903_D27976.ngc SRR10140422
+
+# Rename dbGaP file
+/Users/saracarioscia/grad-school/sra-data/sra$ mv SRR10140422_dbGaP-25903.sra SRR10140422.sra
+
+# Read specs of file 
+/Users/saracarioscia/grad-school/sra-data/sra$ vdb-config --all SRR10140422.sra
+
+# Confirm that file is full, using --ngc as the data repository key (to de-encrypt)
+/Users/saracarioscia/grad-school/sra-data/sra$ vdb-validate --ngc ../../../Downloads/prj_25903_D27976.ngc ./SRR10140422.sra
+
+# Transfer sra file to a sam file 
+/Users/saracarioscia/grad-school/sra-data/sra$ sam-dump --ngc ../../Downloads/prj_25903_D27976.ngc --output-file SRR10140422.sam SRR10140422.sra
+
+# Transform sam file to bam file 
+/Users/saracarioscia/grad-school/sra-data/sra$ samtools view -b -o SRR10140422.bam SRR10140422.sam
+
+
+## Data barcoding and filtering 
+
+# Line 292 - add tag XC (14-bp cell barcode)
+/Users/saracarioscia/grad-school/sra-data/sra$ ~/mccoy-lab/transmission-distortion/Drop-seq_tools-2.3.0/TagBamWithReadSequenceExtended I=SRR10140422.bam O=SRR10140422.sorted.tagged.bam BASE_RANGE=1-14 BASE_QUALITY=10 BARCODED_READ=2 DISCARD_READ=true TAG_NAME=XC NUM_BASES_BELOW_QUALITY=1 
+
+# Line 297 - add tag XM (10-bp of read 1 into molecular barcode)
+/Users/saracarioscia/grad-school/sra-data/sra$ ~/mccoy-lab/transmission-distortion/Drop-seq_tools-2.3.0/TagBamWithReadSequenceExtended I=SRR10140422.sorted.tagged.bam O=SRR10140422.sorted.tagged2.bam BASE_RANGE=1-10 BASE_QUALITY=10 HARD_CLIP_BASES=true BARCODED_READ=1 DISCARD_READ=false TAG_NAME=XM NUM_BASES_BELOW_QUALITY=1
+
+# Line 302 - exclude reads with low-quality bases (quality here refers to how sure we are that the observed sequence matches the real sequence)
+/Users/saracarioscia/grad-school/sra-data/sra$ ~/mccoy-lab/transmission-distortion/Drop-seq_tools-2.3.0/FilterBAM I=SRR10140422.sorted.tagged2.bam O=SRR10140422.sorted.tagged2.filtered.bam TAG_REJECT=XQ
+
+
+## Align to hg38 via bwa-mem
+
+# Convert BAM to fastq
+/Users/saracarioscia/mccoy-lab/transmission-distortion/sperm-data$ java -jar $PICARD SamToFastq I=/Users/saracarioscia/grad-school/sra-data/sra/SRR10140422.sorted.tagged2.filtered.bam FASTQ=SRR10140422.fastq
+
+# Download reference hg 38
+wget http://hgdownload.cse.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
+gunzip hg38.fa.gz
+
+# Create fasta index file - index uses my .fa file and makes another reference genome that works better with bwa
+/Users/saracarioscia/mccoy-lab/transmission-distortion/sperm-data$ bwa index -p hg38bwaidx hg38.fa
+
+# Use bwa mem. Output will be a mapped bam file - check in IGV 
+/Users/saracarioscia/mccoy-lab/transmission-distortion/sperm-data$ bwa mem -M hg38bwaidx SRR10140422.fastq > SRR10140422.out.sam
+
+# Process for viewing in IGV (or convert back to bam)
+samtools sort SRR10140422.out.sam > SRR10140422.out.sorted.sam 
+samtools index SRR10140422.out.sorted.sam 
+
+# Create sequence dictionary for the MergeBamAlignment step (in the same directory as my reference fasta)
+/Users/saracarioscia/mccoy-lab/transmission-distortion/sperm-data$ java -jar $PICARD CreateSequenceDictionary R=hg38.fa O=hg38.dict
+
+# Merge unmapped and mapped BAMs
+# this will be: output of bwa mem (mapped) AND the unmapped map (the one I converted to a fastq -- SRR10140422.sorted.tagged2.filtered.bam)
+# sample: java -jar picard.jar MergeBamAlignment ALIGNED=aligned.bam UNMAPPED=unmapped.bam O=merge_alignments.bam R=reference_sequence.fasta
+/Users/saracarioscia/mccoy-lab/transmission-distortion/sperm-data$ java -jar $PICARD MergeBamAlignment ALIGNED=SRR10140422.out.sorted.bam UNMAPPED=~/grad-school/sra-data/sra/SRR10140422.sorted.tagged2.filtered.bam O=SRR10140422.merge_alignments.bam R=hg38.fa INCLUDE_SECONDARY_ALIGNMENTS=false PAIRED_RUN=false	
+
+# Mark PCR duplicates (STRATEGY is no longer an option; clustering option is removed, so removal based on position is the default) 
+/Users/saracarioscia/mccoy-lab/transmission-distortion/sperm-data$ SpermSeqMarkDuplicates CELL_BARCODE_TAG=XC MOLECULAR_BARCODE_TAG=XM NUM_BARCODES=20000 CREATE_INDEX=true I=SRR10140422.merge_alignments.bam O=SRR10140422.merge_alignments_dups.bam OUTPUT_STATS=output_stats.txt
+
+
+## Variant calling (GATK)
+
+
+
+
