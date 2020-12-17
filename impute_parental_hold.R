@@ -207,8 +207,10 @@ test <- Reduce(mymerge, result) %>%
 
 # Try fill function: 
 # https://tidyr.tidyverse.org/reference/fill.html
+# Sample works on dummy data 
 
-sample <- tibble(sperm = c(NA, 0, NA, NA, NA, 0, NA, NA, NA, 1, NA, 1, NA)) %>%
+
+sample <- tibble(sperm = c(NA, 2, NA, NA, NA, 2, NA, NA, NA, 3, NA, 3, NA)) %>%
   mutate(sperm_up = sperm) %>%
   mutate(sperm_down = sperm) %>%
   fill(sperm_up, .direction = "up") %>%
@@ -219,7 +221,14 @@ sample$sperm_imputed <- as.numeric(NA)
 sample[sample$is_match == TRUE,]$sperm_imputed <- sample[sample$is_match == TRUE,]$sperm_up
 
 
-sample <- tibble(sperm = c(NA, 2, NA, NA, NA, 2, NA, NA, NA, 3, NA, 3, NA)) %>%
+
+
+# duplicate file all sperm NA and haplotype values 
+test2 <- data.matrix(test)
+
+
+# Works on our sperm! 
+sample <- tibble(sperm = test2[,2]) %>%
   mutate(sperm_up = sperm) %>%
   mutate(sperm_down = sperm) %>%
   fill(sperm_up, .direction = "up") %>%
