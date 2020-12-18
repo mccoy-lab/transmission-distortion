@@ -181,54 +181,72 @@ runHMM <- function(sperm_file) {
   return(predState)
 }
 
-# this works 
-runHMM(sperm.8)
+sperm_files <- lapply(ls(pattern="sperm\\."), function(x) get(x))
+result2 <- lapply(sperm_files, function(x) runHMM(x))
 
-# This works 
-dfList <- list(sperm.2, sperm.3)
-result <- lapply(dfList, function(sperm_file) runHMM(sperm_file))
-
-
-# This  list works but throws an error in the HMM: 
-#  Error in hmm$emissionProbs[state, observation[1]] : subscript out of bounds 
-dfList3 <- lapply(ls(pattern="sperm\\."), function(x) get(x))
-dfList3 <- dfList3[-1]
-
-result <- lapply(dfList3, function(x) runHMM(x))
-
-mymerge <- function(x, y) {
+mymerge2 <- function(x, y) {
   merge(x, y, all = TRUE, by = "Element.pos")
 }
 
-test <- Reduce(mymerge, result) %>%
+test2 <- Reduce(mymerge2, result2) %>% 
   rename("snp.position" = "Element.pos")
-  
-
-
-# Try fill function: 
-# https://tidyr.tidyverse.org/reference/fill.html
-# Sample works on dummy data 
-
-
-sample <- tibble(sperm = c(NA, 2, NA, NA, NA, 2, NA, NA, NA, 3, NA, 3, NA)) %>%
-  mutate(sperm_up = sperm) %>%
-  mutate(sperm_down = sperm) %>%
-  fill(sperm_up, .direction = "up") %>%
-  fill(sperm_down, .direction = "down") %>%
-  mutate(is_match = (sperm_up == sperm_down)) %>%
-  replace_na(list(is_match = FALSE))
-sample$sperm_imputed <- as.numeric(NA)
-sample[sample$is_match == TRUE,]$sperm_imputed <- sample[sample$is_match == TRUE,]$sperm_up
-
 
 
 
 # duplicate file all sperm NA and haplotype values 
-test2 <- data.matrix(test)
+# change all values from characters to numbers (including NA)
+test3 <- data.matrix(test2)
 
 
-# Works on our sperm! 
-sample <- tibble(sperm = test2[,2]) %>%
+# Works on our sperm! Need to make the function work on every sperm in test3 
+# and need to make fill up and down at the end
+fill_NAs <- function(merged_sperm, col_index) {
+  sample <- tibble(sperm = merged_sperm[,col_index]) %>%
+    mutate(sperm_up = sperm) %>%
+    mutate(sperm_down = sperm) %>%
+    fill(sperm_up, .direction = "up") %>%
+    fill(sperm_down, .direction = "down") %>%
+    mutate(is_match = (sperm_up == sperm_down)) %>%
+    replace_na(list(is_match = FALSE))
+  sample$sperm_imputed <- as.numeric(NA)
+  sample[sample$is_match == TRUE,]$sperm_imputed <- sample[sample$is_match == TRUE,]$sperm_up
+  result <- tibble(sperm_id = col_index, gt = sample$sperm_imputed) %>%
+    mutate(position = row_number())
+  return(result)
+}
+
+#sperm3 <- fill_NAs(test3, 3)
+
+sperms <- do.call(rbind, lapply(1:1176, function(x) fill_NAs(test3, x)))
+# lapply(index, function(x) func_name(inputs))
+# runs this function 8 times and gives a list
+
+library(ggplot2)
+ggplot(data = sperms, aes(x = position, y = gt, color = factor(sperm_id))) +
+  geom_line() +
+  facet_wrap(~ sperm_id, ncol = 5)
+
+test <- pivot_wider(sperms, names_from = "sperm_id", values_from = "gt")
+
+
+
+td_test <- function(sperm_matrix, row_index) {
+  test_row <- sperm_matrix[row_index,]
+  gt_vector <- unlist(test_row)[-1]
+  one_count <- sum(gt_vector == 1, na.rm = TRUE)
+  two_count <- sum(gt_vector == 2, na.rm = TRUE)
+  p_value <- binom.test(c(one_count, two_count))$p.value
+  return(p_value)
+}
+
+
+par(mfrow = (c(1, 1)))
+many_snp <- unlist(lapply(1:nrow(test), function(x) td_test(test, x)))
+# return vector of p-values
+plot(-log10(many_snp))
+
+
+sample <- tibble(sperm = test3[,3]) %>%
   mutate(sperm_up = sperm) %>%
   mutate(sperm_down = sperm) %>%
   fill(sperm_up, .direction = "up") %>%
@@ -237,3 +255,10 @@ sample <- tibble(sperm = test2[,2]) %>%
   replace_na(list(is_match = FALSE))
 sample$sperm_imputed <- as.numeric(NA)
 sample[sample$is_match == TRUE,]$sperm_imputed <- sample[sample$is_match == TRUE,]$sperm_up
+
+
+
+# This makes it lose the recombination breakpoint 
+sample <- sample %>% 
+  fill(sperm_imputed, .direction = "up") %>% 
+  fill(sperm_imputed, .direction = "down")
