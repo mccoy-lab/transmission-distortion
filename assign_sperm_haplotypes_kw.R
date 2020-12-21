@@ -2,7 +2,7 @@ library(tidyverse)
 library(dplyr)
 library(pbapply)
 library(HMM)
-install.packages("data.table")
+#install.packages("data.table")
 library(data.table)
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -152,7 +152,7 @@ p1 <- ggplot(data = rbind(
   geom_point()
 
 filename_p1 <- paste("sperm_id_by_pos_", sampleName ,".pdf", sep="")
-ggsave("sperm_id_by_pos.pdf", p1, device="pdf")
+ggsave(filename_p1, p1, device="pdf")
 
 # Scan sperm by sperm to interpret state given emission
 # First, we initialize our HMM
