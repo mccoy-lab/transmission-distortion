@@ -11,8 +11,9 @@ sampleName <- args[2]
 seqError <- as.numeric(args[3]) #0.005
 hapProb <- 1 - seqError
 
+
 # Using this for finding windows in splitWithOverlap function
-window_length <- 2500
+window_length <- as.integer(args[4]) #2500 default, if error raised -- retry with 1000 and 5000 also
 
 # load the data
 dt <- read_delim(input_file, delim = "\t") %>%
@@ -86,10 +87,11 @@ initial_haplotype <- inferred_haplotypes[[1]]
 for (hap_window in 2:length(windows)) {
   olap_haps <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index")
   olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
-  if (mean(olap_haps$h1.x == olap_haps$h1.y) < 0.1) {
+  mean_olap <- mean(olap_haps$h1.x == olap_haps$h1.y)
+  if (mean_olap < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
-  } else if (mean(olap_haps$h1.x == olap_haps$h1.y) < 0.9) {
-    error("Haplotypes within overlapping windows are too discordant to merge.")
+  } else if (mean_olap < 0.9) {
+    error(paste("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_olap))
   }
   initial_haplotype <- tibble(index = olap_haps_complete$index,
                               pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
@@ -129,30 +131,32 @@ for (i in 2:ncol(dt2)) {
   assign(paste("sperm", i, sep = "."), sperm)
 }
 
-p1 <- ggplot(data = rbind(
-  data.table(sperm.2 %>% setnames(., c("pos", "hap")), sperm_id = 2),
-  data.table(sperm.3 %>% setnames(., c("pos", "hap")), sperm_id = 3),
-  data.table(sperm.4 %>% setnames(., c("pos", "hap")), sperm_id = 4),
-  data.table(sperm.5 %>% setnames(., c("pos", "hap")), sperm_id = 5),
-  data.table(sperm.6 %>% setnames(., c("pos", "hap")), sperm_id = 6),
-  data.table(sperm.7 %>% setnames(., c("pos", "hap")), sperm_id = 7),
-  data.table(sperm.8 %>% setnames(., c("pos", "hap")), sperm_id = 8),
-  data.table(sperm.9 %>% setnames(., c("pos", "hap")), sperm_id = 9),
-  data.table(sperm.10 %>% setnames(., c("pos", "hap")), sperm_id = 10),
-  data.table(sperm.11 %>% setnames(., c("pos", "hap")), sperm_id = 11),
-  data.table(sperm.12 %>% setnames(., c("pos", "hap")), sperm_id = 12),
-  data.table(sperm.13 %>% setnames(., c("pos", "hap")), sperm_id = 13),
-  data.table(sperm.14 %>% setnames(., c("pos", "hap")), sperm_id = 14),
-  data.table(sperm.15 %>% setnames(., c("pos", "hap")), sperm_id = 15),
-  data.table(sperm.16 %>% setnames(., c("pos", "hap")), sperm_id = 16),
-  data.table(sperm.17 %>% setnames(., c("pos", "hap")), sperm_id = 17),
-  data.table(sperm.18 %>% setnames(., c("pos", "hap")), sperm_id = 18),
-  data.table(sperm.19 %>% setnames(., c("pos", "hap")), sperm_id = 19)),
-  aes(x = pos, y = sperm_id, color = hap)) +
-  geom_point()
+#eventually save this information to .csv
 
-filename_p1 <- paste("sperm_id_by_pos_", sampleName ,".pdf", sep="")
-ggsave(filename_p1, p1, device="pdf")
+# p1 <- ggplot(data = rbind(
+#   data.table(sperm.2 %>% setnames(., c("pos", "hap")), sperm_id = 2),
+#   data.table(sperm.3 %>% setnames(., c("pos", "hap")), sperm_id = 3),
+#   data.table(sperm.4 %>% setnames(., c("pos", "hap")), sperm_id = 4),
+#   data.table(sperm.5 %>% setnames(., c("pos", "hap")), sperm_id = 5),
+#   data.table(sperm.6 %>% setnames(., c("pos", "hap")), sperm_id = 6),
+#   data.table(sperm.7 %>% setnames(., c("pos", "hap")), sperm_id = 7),
+#   data.table(sperm.8 %>% setnames(., c("pos", "hap")), sperm_id = 8),
+#   data.table(sperm.9 %>% setnames(., c("pos", "hap")), sperm_id = 9),
+#   data.table(sperm.10 %>% setnames(., c("pos", "hap")), sperm_id = 10),
+#   data.table(sperm.11 %>% setnames(., c("pos", "hap")), sperm_id = 11),
+#   data.table(sperm.12 %>% setnames(., c("pos", "hap")), sperm_id = 12),
+#   data.table(sperm.13 %>% setnames(., c("pos", "hap")), sperm_id = 13),
+#   data.table(sperm.14 %>% setnames(., c("pos", "hap")), sperm_id = 14),
+#   data.table(sperm.15 %>% setnames(., c("pos", "hap")), sperm_id = 15),
+#   data.table(sperm.16 %>% setnames(., c("pos", "hap")), sperm_id = 16),
+#   data.table(sperm.17 %>% setnames(., c("pos", "hap")), sperm_id = 17),
+#   data.table(sperm.18 %>% setnames(., c("pos", "hap")), sperm_id = 18),
+#   data.table(sperm.19 %>% setnames(., c("pos", "hap")), sperm_id = 19)),
+#   aes(x = pos, y = sperm_id, color = hap)) +
+#   geom_point()
+# 
+# filename_p1 <- paste("sperm_id_by_pos_", sampleName ,".pdf", sep="")
+# ggsave(filename_p1, p1, device="pdf")
 
 # Scan sperm by sperm to interpret state given emission
 # First, we initialize our HMM
@@ -226,10 +230,10 @@ fill_NAs <- function(merged_sperm, col_index) {
 sperms <- do.call(rbind, pblapply(2:(ncol(dt2) - 1), function(x) fill_NAs(dt3, x)))
 # lapply(index, function(x) func_name(inputs))
 # runs this function 8 times and gives a list
-p2 <- ggplot(data = as.data.table(sperms)[sperm_id %in% 2:19][sample(1:151865352, 1000000),], aes(x = position, y = sperm_id, color = factor(gt))) +
-  geom_point()
-filename_p2 <- paste("sperm_id_by_pos_fillNA_", sampleName, ".pdf", sep="")
-ggsave(filename_p2, p2, device="pdf")
+# p2 <- ggplot(data = as.data.table(sperms)[sperm_id %in% 2:19][sample(1:151865352, 1000000),], aes(x = position, y = sperm_id, color = factor(gt))) +
+#   geom_point()
+# filename_p2 <- paste("sperm_id_by_pos_fillNA_", sampleName, ".pdf", sep="")
+# ggsave(filename_p2, p2, device="pdf")
 
 test <- pivot_wider(sperms, names_from = "sperm_id", values_from = "gt")
 td_test <- function(sperm_matrix, row_index) {
@@ -238,20 +242,29 @@ td_test <- function(sperm_matrix, row_index) {
   one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
   two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
   p_value <- binom.test(c(one_count, two_count))$p.value
-  return(p_value)
+  return(c(p_value, one_count, two_count))
 }
 
-p_vals <- unlist(pblapply(1:nrow(test), function(x) td_test(test, x)))
-logged_p_vals <- -log10(p_vals)
+# hap_counts <- function(sperm_matrix, row_index, hap_to_check) {
+#   test_row <- sperm_matrix[row_index,]
+#   gt_vector <- unlist(test_row)[-1]
+#   hap_count <- sum(gt_vector == hap_to_check, na.rm = TRUE)
+#   return(hap_count)
+# }
+# hap1_counts <- unlist(pblapply(1:nrow(test), function(x) hap_counts(test, x, "haplotype1")))
+
+
+df_counts_pvals <- do.call(rbind, pblapply(1:nrow(test), function(x) td_test(test, x))) %>%
+  as_tibble() %>% add_column(positions) #bind the positions vector to df_counts_pvals
+colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
+
+filename_df <- paste("table_with_uncorrected_pval_", sampleName, ".csv", sep="")
+write.csv(df_counts_pvals, filename_df)
+
+  
+#logged_p_vals <- -log10(df_counts_pvals$pval)
 # return vector of p-values
-filename_p3 <- paste("pvalue_by_pos_", sampleName, ".pdf", sep="")
-pdf(filename_p3)
-plot(logged_p_vals)
-dev.off()
-
-test$rawpvalues <- p_vals
-test$loggedpvalues <- logged_p_vals
-test$genomic_positions <- positions
-
-filename_df <- paste("df_test_with_uncorrected_pval_", sampleName, ".RData", sep="")
-save(test, file=filename_df)
+# filename_p3 <- paste("pvalue_by_pos_", sampleName, ".pdf", sep="")
+# pdf(filename_p3)
+# plot(logged_p_vals)
+# dev.off()
