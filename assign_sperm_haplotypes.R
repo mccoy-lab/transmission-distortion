@@ -7,7 +7,7 @@ library(data.table)
 
 # Also try it on individual 9, chr 9 
 #input_file <- "/Users/saracarioscia/mccoy-lab/nc10oldoil_goodcellsreplicatebcs_filteredhetsnps_21.cellsbyrow.txt"
-input_file <- "/Users/saracarioscia/mccoy-lab/nc2absept17_goodcellsreplicatebcs_filteredhetsnps_10.cellsbyrow.txt"
+input_file <- "/Users/saracarioscia/mccoy-lab/transmission-distortion/nc12ab_goodcellsreplicatebcs_filteredhetsnps_10.cellsbyrow.txt"
 
 # Using this for ??
 window_length <- 2500
