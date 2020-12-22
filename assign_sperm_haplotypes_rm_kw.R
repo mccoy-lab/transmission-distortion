@@ -169,6 +169,16 @@ fill_NAs <- function(merged_sperm, col_index) {
     replace_na(list(is_match = FALSE))
   sperm_sample$sperm_imputed <- as.character(NA)
   sperm_sample[sperm_sample$is_match == TRUE,]$sperm_imputed <- sperm_sample[sperm_sample$is_match == TRUE,]$sperm_up
+  
+  #fill beginning of chromosome NA's
+  first <- which(!is.na(sperm_sample$sperm_imputed))[1]
+  sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
+  #fill end of chromosome NA's
+  sperm_sample$sperm_imputed <- rev(sperm_sample$sperm_imputed)
+  first <- which(!is.na(sperm_sample$sperm_imputed))[1]
+  sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
+  #reverse chromosome imputation back so it faces the right way
+  sperm_sample$sperm_imputed <- rev(sperm_sample$sperm_imputed)
   return(sperm_sample$sperm_imputed)
 }
 
