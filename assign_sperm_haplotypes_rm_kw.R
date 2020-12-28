@@ -7,12 +7,11 @@ args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
 sampleName <- args[2]
 chrom <- args[3]
-baseDir <- args[4]
-outDir <- args[5]
-seqError <- as.numeric(args[6]) #0.005
+outDir <- args[4]
+seqError <- as.numeric(args[5]) #0.005
 hapProb <- 1 - seqError
-threads <- as.integer(args[7])
-window_length <- as.integer(args[8]) #2500 default, if error raised -- retry with 1000 and 5000 also
+threads <- as.integer(args[6])
+window_length <- as.integer(args[7]) #2500 default, if error raised -- retry with 1000 and 5000 also
 
 # load the data
 dt <- read_delim(input_file, delim = "\t") %>%
@@ -206,3 +205,103 @@ colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position
 
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
 write.csv(df_counts_pvals, filename_df)
+
+#find recombination spots
+find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
+  input_vec <- input_matrix[, x]
+  ident <- identities[x]
+  single_rs <- FALSE #single recombination spot only
+  
+  recomb_spots <- c() #initialize empty list
+  
+  na_locs <- which(is.na(input_vec)) #which locations have NAs
+  num_na_locs <- sum(is.na(input_vec)) #how many NAs
+  rle_result <- rle(input_vec)
+  
+  hap_locs <- which(!is.na(rle_result$values)) #which locations from the rle result are haplotypes
+  neighboring_haps <- diff(hap_locs)
+  lens_fresult <- lapply(rle_result["lengths"], cumsum)$lengths
+  if (length(neighboring_haps) > 0) { #this section is in case there is at least one recombination spot without NAs buffering it, but there are NAs buffering others
+    for (i in 1:length(neighboring_haps)) {
+      if (neighboring_haps[i] == 1){
+        rspot_end_loc <- lens_fresult[hap_locs[i+1]] #because of the cumsum, this gives us the index
+        recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[rspot_end_loc-1], genomic_positions[rspot_end_loc]))
+      }
+    }
+  }
+  
+  if ((num_na_locs == 0) & (length(rle_result$values) == 1)) { #no recombination spots at all
+    recomb_spots <- as_tibble(cbind(ident, "None", "None"))
+    colnames(recomb_spots) <- c("Ident", "Genomic_Start", "Genomic_End")
+    return (recomb_spots)
+  }
+  
+  if ((num_na_locs == 0) & (length(rle_result$values) > 1)) {#recombination spots, but no NA's buffering them
+    recomb_spot_starts <- lapply(rle_result["lengths"], cumsum)$lengths[1:length(rle_result$values)-1]
+    recomb_spot_ends <- recomb_spot_starts + 1
+    recomb_spots <- as_tibble(cbind(ident, genomic_positions[recomb_spot_starts], genomic_positions[recomb_spot_ends]))
+    colnames(recomb_spots) <- c("Ident", "Genomic_Start", "Genomic_End")
+    return (recomb_spots)
+  }
+  
+  neighboring_difs <- diff(na_locs)
+  
+  subsetted_na_locs <- c(na_locs[1])
+  for (i in 2:length(na_locs)){
+    if (neighboring_difs[i-1] != 1){ #grab locations of "new" NAs that aren't right next to other NAs
+      subsetted_na_locs <- cbind(subsetted_na_locs, na_locs[i]) #need this for when we have different number of NAs buffering, especially more than 1 between the different haplotypes
+    }
+  }
+  
+  first_na_loc <- subsetted_na_locs[1] #first NA loc, this variable will be overwritten in the while loop
+  first_na_loc_fi <- first_na_loc #copying variable to use it for static indexing later
+  last_na_loc <- na_locs[length(na_locs)] #last NA loc in full input
+  i <- 1 #start incremental counter
+  
+  if ((last_na_loc - first_na_loc + 1) == num_na_locs) { #there's a single recombination spot
+    single_rs <- TRUE
+    if (input_vec[first_na_loc-1] != input_vec[last_na_loc + 1]) {# verify haplotypes are different
+      recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[first_na_loc-1], genomic_positions[last_na_loc+1])) #store recombination spot
+    } else {stop(paste0("Haplotypes surrounding single set of NAs match but mistakenly appear to be a recombination spot at ", ident, genomic_positions[first_na_loc-1], " and ", genomic_positions[last_na_loc + 1]))}
+  } else { #multiple recombination spots, all boundaries buffered by NAs
+    
+    while (((last_na_loc - first_na_loc +1) > num_na_locs) & (num_na_locs > 0)){ #first condition means there must be some haplotypes interspersed with all the NAs (i.e. there is more than one recombination spot); second condition means we've looped through and accounted for all of the NAs
+      first_hp_loc <- which(!is.na(input_vec[first_na_loc_fi : last_na_loc]))[i] #this will find the first haplotype location for each recombination spot unless it is the last, then it should return an NA; needs to be used in combo with static indexer because it's relative to number of NAs left, not full input
+      if (!is.na(first_hp_loc)) { #for all but the last recombination spot
+        if (input_vec[first_na_loc -1] != input_vec[first_na_loc_fi + first_hp_loc -1]) { # verify haplotypes are different
+          recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[first_na_loc -1], genomic_positions[first_na_loc_fi + first_hp_loc -1])) #add the genomic position boundaries of the recombination spot
+        } else {stop(paste0("Haplotypes surrounding NAs match but mistakenly appear to be a recombination spot at ", ident, genomic_positions[first_na_loc -1], " and ", genomic_positions[first_na_loc_fi + first_hp_loc-1]))}
+        
+        i <- i +1 #add to incremental counter
+        first_na_loc <- subsetted_na_locs[i] #find new first NA for next recombination spot
+        num_na_locs <- sum(is.na(input_vec[(first_na_loc_fi + first_hp_loc-1):length(input_vec)])) #find new number of remaining/unaccounted for NAs
+      }
+      else { #reached last recombination spot, will add outside of the loop
+        break
+      }
+    }
+  }
+  
+  if (((last_na_loc - first_na_loc + 1) > 0) & !single_rs) { #add last recombination spot
+    if (input_vec[first_na_loc -1] != input_vec[last_na_loc+1]) { #verify haplotypes are different
+      recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[first_na_loc - 1], genomic_positions[last_na_loc+1]))
+    } else {stop(paste0("Haplotypes surrounding last recombination spot NAs match but mistakenly appear to be a recombination spot at ", ident, genomic_positions[first_na_loc -1], " and ", genomic_positions[last_na_loc+1]))}
+  }
+  
+  recomb_spots <- as_tibble(recomb_spots)
+  colnames(recomb_spots) <- c("Ident", "Genomic_Start", "Genomic_End")
+  
+  return (recomb_spots)
+  
+}
+
+idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
+
+#recomb_spots_all <- do.call(rbind, pblapply(1:ncol(filled_sperm),
+#                                            function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions)))
+
+recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
+                                              function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
+                                              mc.cores=getOption("mc.cores", threads)))
+filename_rs <- paste0(outDir, sampleName, "_", chrom, "_recombination_locs.csv")
+write.csv(recomb_spots_all, filename_rs)
