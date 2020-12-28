@@ -3,6 +3,7 @@
 #SBATCH --job-name=recomb_y_pval
 #SBATCH -N 1
 #SBATCH --partition=shared
+#SBATCH --cpus-per-task=24
 #SBATCH --mem=100G
 #SBATCH --time=72:00:00
 #SBATCH --mail-type=all
