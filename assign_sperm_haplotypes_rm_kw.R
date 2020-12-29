@@ -30,7 +30,6 @@ getmode <- function(v) {
   uniqv[which.max(tabulate(match(v, uniqv)))]
 }
 
-
 # this function replaces 0s with 1s and 1s with 0s in a data frame
 invertBits <- function(df) {
   df[df == 0] <- -1
@@ -103,9 +102,9 @@ for (hap_window in 2:length(windows)) {
                                                           !is.na(olap_haps_complete$pos.y),]$h1.x,
                                      olap_haps_complete[is.na(olap_haps_complete$pos.x),]$h1.y))
 }
+
 complete_haplotypes <- initial_haplotype %>%
   mutate(h2 = invertBits(h1))
-
 # Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
 # in h1 at that position, replace the allele with "h1". Do the same for h2.
 for (i in 1:ncol(dt)) {
@@ -123,7 +122,6 @@ states <- c("haplotype1", "haplotype2")
 hap1Prob <- c(1-(1/num_snps), 1/num_snps)
 hap2Prob <- c(1/num_snps, 1-(1/num_snps))
 transProb <- matrix(c(hap1Prob, hap2Prob), 2)
-
 # Two emissions (observations): an allele from h1 or an allele from h2
 emissions <- c("h1","h2")
 # Prob of emitting an h1 allele, prob of emitting an h2 allele in state `haplotype1`
@@ -131,17 +129,14 @@ h1ProbEmiss <- c(hapProb, seqError)
 # Prob of emitting an h1 allele, prob of emitting an h2 allele in state `haplotype2`
 h2ProbEmiss <- c(seqError, hapProb)
 emissProb <- matrix(c(h1ProbEmiss, h2ProbEmiss), 2)
-
 #build model with the above inputs
 hmm <- initHMM(States = states,
                Symbols = emissions,
                transProbs = transProb,
                emissionProbs = emissProb)
-
 ###### Function to run HMM on an input file
 # Compute the inferred state using each sperm cell as the input
 # (Input must be a vector)
-
 runHMM <- function(sperm_dt, column_index) {
   original_obs <- sperm_dt[,column_index]
   inferred_state <- viterbi(hmm, na.omit(sperm_dt[, column_index]))
@@ -152,9 +147,7 @@ runHMM <- function(sperm_dt, column_index) {
 imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(dt),
                                                      function(x) runHMM(dt, x),
                                                      mc.cores = getOption("mc.cores", threads))))
-
 colnames(imputed_sperm) <- colnames(dt)
-
 # Works on our sperm! Need to make the function work on every sperm in test3
 # and need to make fill up and down at the end
 fill_NAs <- function(merged_sperm, col_index) {
@@ -168,7 +161,6 @@ fill_NAs <- function(merged_sperm, col_index) {
     replace_na(list(is_match = FALSE))
   sperm_sample$sperm_imputed <- as.character(NA)
   sperm_sample[sperm_sample$is_match == TRUE,]$sperm_imputed <- sperm_sample[sperm_sample$is_match == TRUE,]$sperm_up
-  
   #fill beginning of chromosome NA's
   first <- which(!is.na(sperm_sample$sperm_imputed))[1]
   sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
@@ -183,7 +175,7 @@ fill_NAs <- function(merged_sperm, col_index) {
 
 filled_sperm <- as_tibble(do.call(cbind, 
                                   pblapply(1:ncol(imputed_sperm),
-                                              function(x) fill_NAs(imputed_sperm, x))))
+                                           function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(dt)
 
 td_test <- function(sperm_matrix, row_index) {
@@ -200,108 +192,36 @@ df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
                                              mc.cores=getOption("mc.cores", threads))) %>%
   as_tibble() %>% 
   add_column(positions) #bind the positions vector to df_counts_pvals
-
 colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
-
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
-write.csv(df_counts_pvals, filename_df)
+write_csv(df_counts_pvals, filename_df)
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
-  input_vec <- input_matrix[, x]
   ident <- identities[x]
-  single_rs <- FALSE #single recombination spot only
-  
-  recomb_spots <- c() #initialize empty list
-  
-  na_locs <- which(is.na(input_vec)) #which locations have NAs
-  num_na_locs <- sum(is.na(input_vec)) #how many NAs
-  rle_result <- rle(input_vec)
-  
-  hap_locs <- which(!is.na(rle_result$values)) #which locations from the rle result are haplotypes
-  neighboring_haps <- diff(hap_locs)
-  lens_fresult <- lapply(rle_result["lengths"], cumsum)$lengths
-  if (length(neighboring_haps) > 0) { #this section is in case there is at least one recombination spot without NAs buffering it, but there are NAs buffering others
-    for (i in 1:length(neighboring_haps)) {
-      if (neighboring_haps[i] == 1){
-        rspot_end_loc <- lens_fresult[hap_locs[i+1]] #because of the cumsum, this gives us the index
-        recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[rspot_end_loc-1], genomic_positions[rspot_end_loc]))
-      }
-    }
-  }
-  
-  if ((num_na_locs == 0) & (length(rle_result$values) == 1)) { #no recombination spots at all
-    recomb_spots <- as_tibble(cbind(ident, "None", "None"))
-    colnames(recomb_spots) <- c("Ident", "Genomic_Start", "Genomic_End")
-    return (recomb_spots)
-  }
-  
-  if ((num_na_locs == 0) & (length(rle_result$values) > 1)) {#recombination spots, but no NA's buffering them
-    recomb_spot_starts <- lapply(rle_result["lengths"], cumsum)$lengths[1:length(rle_result$values)-1]
-    recomb_spot_ends <- recomb_spot_starts + 1
-    recomb_spots <- as_tibble(cbind(ident, genomic_positions[recomb_spot_starts], genomic_positions[recomb_spot_ends]))
-    colnames(recomb_spots) <- c("Ident", "Genomic_Start", "Genomic_End")
-    return (recomb_spots)
-  }
-  
-  neighboring_difs <- diff(na_locs)
-  
-  subsetted_na_locs <- c(na_locs[1])
-  for (i in 2:length(na_locs)){
-    if (neighboring_difs[i-1] != 1){ #grab locations of "new" NAs that aren't right next to other NAs
-      subsetted_na_locs <- cbind(subsetted_na_locs, na_locs[i]) #need this for when we have different number of NAs buffering, especially more than 1 between the different haplotypes
-    }
-  }
-  
-  first_na_loc <- subsetted_na_locs[1] #first NA loc, this variable will be overwritten in the while loop
-  first_na_loc_fi <- first_na_loc #copying variable to use it for static indexing later
-  last_na_loc <- na_locs[length(na_locs)] #last NA loc in full input
-  i <- 1 #start incremental counter
-  
-  if ((last_na_loc - first_na_loc + 1) == num_na_locs) { #there's a single recombination spot
-    single_rs <- TRUE
-    if (input_vec[first_na_loc-1] != input_vec[last_na_loc + 1]) {# verify haplotypes are different
-      recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[first_na_loc-1], genomic_positions[last_na_loc+1])) #store recombination spot
-    } else {stop(paste0("Haplotypes surrounding single set of NAs match but mistakenly appear to be a recombination spot at ", ident, genomic_positions[first_na_loc-1], " and ", genomic_positions[last_na_loc + 1]))}
-  } else { #multiple recombination spots, all boundaries buffered by NAs
-    
-    while (((last_na_loc - first_na_loc +1) > num_na_locs) & (num_na_locs > 0)){ #first condition means there must be some haplotypes interspersed with all the NAs (i.e. there is more than one recombination spot); second condition means we've looped through and accounted for all of the NAs
-      first_hp_loc <- which(!is.na(input_vec[first_na_loc_fi : last_na_loc]))[i] #this will find the first haplotype location for each recombination spot unless it is the last, then it should return an NA; needs to be used in combo with static indexer because it's relative to number of NAs left, not full input
-      if (!is.na(first_hp_loc)) { #for all but the last recombination spot
-        if (input_vec[first_na_loc -1] != input_vec[first_na_loc_fi + first_hp_loc -1]) { # verify haplotypes are different
-          recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[first_na_loc -1], genomic_positions[first_na_loc_fi + first_hp_loc -1])) #add the genomic position boundaries of the recombination spot
-        } else {stop(paste0("Haplotypes surrounding NAs match but mistakenly appear to be a recombination spot at ", ident, genomic_positions[first_na_loc -1], " and ", genomic_positions[first_na_loc_fi + first_hp_loc-1]))}
-        
-        i <- i +1 #add to incremental counter
-        first_na_loc <- subsetted_na_locs[i] #find new first NA for next recombination spot
-        num_na_locs <- sum(is.na(input_vec[(first_na_loc_fi + first_hp_loc-1):length(input_vec)])) #find new number of remaining/unaccounted for NAs
-      }
-      else { #reached last recombination spot, will add outside of the loop
-        break
-      }
-    }
-  }
-  
-  if (((last_na_loc - first_na_loc + 1) > 0) & !single_rs) { #add last recombination spot
-    if (input_vec[first_na_loc -1] != input_vec[last_na_loc+1]) { #verify haplotypes are different
-      recomb_spots <- rbind(recomb_spots, c(ident, genomic_positions[first_na_loc - 1], genomic_positions[last_na_loc+1]))
-    } else {stop(paste0("Haplotypes surrounding last recombination spot NAs match but mistakenly appear to be a recombination spot at ", ident, genomic_positions[first_na_loc -1], " and ", genomic_positions[last_na_loc+1]))}
-  }
-  
-  recomb_spots <- as_tibble(recomb_spots)
-  colnames(recomb_spots) <- c("Ident", "Genomic_Start", "Genomic_End")
-  
-  return (recomb_spots)
-  
+  input_tibble <- input_matrix[, x] %>%
+    mutate(., index = row_number()) %>%
+    mutate(., positions = genomic_positions)
+  complete_cases_tibble <- input_tibble[complete.cases(input_tibble),]
+  input_vec <- as.factor(complete_cases_tibble[[1]])
+  switch_indices <- which(input_vec[-1] != input_vec[-length(input_vec)])
+  switch_indices_input <- complete_cases_tibble[switch_indices,]$index
+  crossover_start <- input_tibble[switch_indices_input,]$positions
+  rev_input_tibble <- arrange(input_tibble, -index) %>%
+    mutate(., index = row_number())
+  complete_cases_rev_tibble <- rev_input_tibble[complete.cases(rev_input_tibble),]
+  rev_input_vec <- as.factor(complete_cases_rev_tibble[[1]])
+  rev_switch_indices <- which(rev_input_vec[-1] != rev_input_vec[-length(rev_input_vec)])
+  rev_switch_indices_input <- complete_cases_rev_tibble[rev_switch_indices,]$index
+  crossover_end <- rev(rev_input_tibble[rev_switch_indices_input,]$positions)
+  recomb_spots <- tibble(Ident = ident, Genomic_start = crossover_start, Genomic_end = crossover_end)
+  return(recomb_spots)
 }
 
 idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
-
-#recomb_spots_all <- do.call(rbind, pblapply(1:ncol(filled_sperm),
-#                                            function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions)))
-
 recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
                                               function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
-                                              mc.cores=getOption("mc.cores", threads)))
+                                              mc.cores=getOption("mc.cores", threads))) %>% 
+  right_join(., tibble(Ident = idents_for_csv), by = "Ident")
 filename_rs <- paste0(outDir, sampleName, "_", chrom, "_recombination_locs.csv")
-write.csv(recomb_spots_all, filename_rs)
+write_csv(recomb_spots_all, filename_rs)
