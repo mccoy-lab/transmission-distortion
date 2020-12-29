@@ -6,6 +6,8 @@ args <- commandArgs(trailingOnly = TRUE)
 num_sperm <- 15
 #num_snps <- as.integer(args[2])
 num_snps <- 30000
+#coverage <- as.numeric(args[3])
+coverage <- 0.001
 
 #start with 2 parental chromosomes of heterozygous sites
 #first parental chromosome
@@ -15,7 +17,7 @@ parental_haps <- data.frame(cbind(hap1, hap2))
 colnames(parental_haps) <- c("Parental1", "Parental2")
 
 indices <- 1:num_snps
-pseudo_positions <- lapply(indices, function(x) floor(x**1.5)+4000)
+pseudo_positions <- (indices+40)*1000 #expect a SNP every 1000 bp or so 
 
 
 sperm_mat <- matrix(ncol=num_sperm, nrow=num_snps)
