@@ -22,6 +22,7 @@ pseudo_positions <- (indices+40)*1000 #expect a SNP every 1000 bp or so
 
 sperm_mat <- matrix(ncol=num_sperm, nrow=num_snps)
 num_recomb_sites <- sample(c(0,1,2), size=num_sperm, replace = TRUE, prob=c(0.05, 0.75, 0.20))
+#need to store the recombination sites so that we can compare later results with ground truth
 for (i in 1:num_sperm) {
   num_rs <- num_recomb_sites[i]
   rs_sites <- sample(1:(num_snps-1), size=num_rs, replace=FALSE, prob=rep(1/(num_snps-1), num_snps-1))
@@ -45,4 +46,4 @@ for (i in 1:num_sperm) {
   }
 }
 
-head(sperm_mat)
+sperm_mat_with_na <- sperm_mat #copy matrix to a new matrix where we'll add in NAs so that we retain the full original knowledge
