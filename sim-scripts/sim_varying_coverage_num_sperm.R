@@ -40,7 +40,7 @@ set.seed(random_seed)
 lambda <- 1
 num_recomb_sites <- rpois(num_sperm, lambda)
 
-#This is part 1 of method 2
+####### COVERAGE This is part 1 of method 2
 # #num_not_nan_per_row <- as.integer(args[11])
 # num_not_nan_per_row <- 3 #coverage increases as this number increases
 # #set up a check that verifies that num_not_nan_per_row is at least 2, otherwise we're not working with heterozygous SNPs
@@ -55,16 +55,16 @@ num_recomb_sites <- rpois(num_sperm, lambda)
 
 # coverage <- -log(missing_genotype_rate)
 # message(paste0("The coverage of the this simulation is ", coverage))
-#This ends part 1 of method 2
+####### COVERAGE This ends part 1 of method 2
 
-#This is part 1 of method 1 
+####### COVERAGE This is part 1 of method 1 
 #coverage <- as.numeric(args[11])
 coverage <- 0.001
 missing_genotype_rate <- dpois(0, coverage)
 
 num_genotypes <- num_sperm * num_snps
 num_nas <- as.integer(num_genotypes * missing_genotype_rate)
-#This ends part 1 of method 1
+####### COVERAGE This ends part 1 of method 1
 
 #start with 2 parental chromosomes of heterozygous sites
 #first parental chromosome
@@ -97,7 +97,7 @@ sperm_mat <- sapply(sim_sperm, "[[", 2)
 first_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
 
-#This is part 2 of method 1
+####### COVERAGE This is part 2 of method 1
 add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps ){
     to_return <- rep(NA, num_snps*num_sperm)
     coords_to_change <- sample(1:(num_snps*num_sperm), size=(num_snps*num_sperm)-num_nas, replace=FALSE)
@@ -108,9 +108,9 @@ add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps ){
 sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
 
 sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=TRUE) >= 1) & (rowSums(sperm_mat_with_na == 0, na.rm=TRUE) >= 1)),]
-#This ends part 2 of method 1
+####### COVERAGE This ends part 2 of method 1
 
-#This is part 2 of method 2
+####### COVERAGE This is part 2 of method 2
 # add_to_na <- function(to_add_from, num_not_nas_perRow, num_sperm, x){
 #   to_return <- rep(NA, num_sperm)
 #   where_0 <- sample(which(to_add_from[x,]==0), size=1)
@@ -126,7 +126,7 @@ sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=T
 # sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
 #                                                function (x) add_to_na(sperm_mat, num_not_nan_per_row, num_sperm, x),
 #                                                mc.cores=getOption("mc.cores", threads)))
-#This ends part 2 of method 2
+####### COVERAGE This ends part 2 of method 2
 
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
