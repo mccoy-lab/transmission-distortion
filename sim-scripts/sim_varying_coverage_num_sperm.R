@@ -40,7 +40,7 @@ set.seed(random_seed)
 lambda <- 1
 num_recomb_sites <- rpois(num_sperm, lambda)
 
-####### COVERAGE This is part 1 of method 2
+####### COVERAGE This is part 1 of method 2A
 # #num_not_nan_per_row <- as.integer(args[11])
 # num_not_nan_per_row <- 3 #coverage increases as this number increases
 # #set up a check that verifies that num_not_nan_per_row is at least 2, otherwise we're not working with heterozygous SNPs
@@ -54,16 +54,32 @@ num_recomb_sites <- rpois(num_sperm, lambda)
 # missing_genotype_rate <- num_nas / num_genotypes
 
 # coverage <- -log(missing_genotype_rate)
-# message(paste0("The coverage of the this simulation is ", coverage))
-####### COVERAGE This ends part 1 of method 2
+# message(paste0("The coverage of this simulation is ", coverage))
+####### COVERAGE This ends part 1 of method 2A
+
+####### COVERAGE This is part 1 of method 2B
+#num_not_nan_per_row_base <- as.integer(args[11])
+num_not_nan_per_row_base <- 2 #coverage increases as this number increases
+#set up a check that verifies that num_not_nan_per_row is at least 2. Otherwise we're not working with heterozygous SNPs
+stopifnot(num_not_nan_per_row_base >= 2)
+
+#add to the base num_not_nan_per_row_base to find out the actual number of not NAs for each row. We'll now have a vector rather than a single integer
+num_not_nan_per_row <- num_not_nan_per_row_base + rpois(num_snps, lambda)
+num_genotypes <- num_sperm * num_snps
+num_nas <- num_genotypes - sum(num_not_nan_per_row)
+missing_genotype_rate <- num_nas / num_genotypes
+coverage <- -log(missing_genotype_rate)
+message(paste0("The coverage of this simulation is ", coverage))
+####### COVERAGE This ends part 1 of method 2B
+
 
 ####### COVERAGE This is part 1 of method 1 
 #coverage <- as.numeric(args[11])
-coverage <- 0.001
-missing_genotype_rate <- dpois(0, coverage)
-
-num_genotypes <- num_sperm * num_snps
-num_nas <- as.integer(num_genotypes * missing_genotype_rate)
+# coverage <- 0.001
+# missing_genotype_rate <- dpois(0, coverage)
+# 
+# num_genotypes <- num_sperm * num_snps
+# num_nas <- as.integer(num_genotypes * missing_genotype_rate)
 ####### COVERAGE This ends part 1 of method 1
 
 #start with 2 parental chromosomes of heterozygous sites
@@ -98,19 +114,19 @@ first_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
 
 ####### COVERAGE This is part 2 of method 1
-add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps ){
-    to_return <- rep(NA, num_snps*num_sperm)
-    coords_to_change <- sample(1:(num_snps*num_sperm), size=(num_snps*num_sperm)-num_nas, replace=FALSE)
-    to_return[coords_to_change] <- as.vector(to_add_from[coords_to_change])
-    to_return <- matrix(to_return, ncol=num_sperm, nrow=num_snps)
-    return (to_return) }
-
-sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
-
-sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=TRUE) >= 1) & (rowSums(sperm_mat_with_na == 0, na.rm=TRUE) >= 1)),]
+# add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps ){
+#     to_return <- rep(NA, num_snps*num_sperm)
+#     coords_to_change <- sample(1:(num_snps*num_sperm), size=(num_snps*num_sperm)-num_nas, replace=FALSE)
+#     to_return[coords_to_change] <- as.vector(to_add_from[coords_to_change])
+#     to_return <- matrix(to_return, ncol=num_sperm, nrow=num_snps)
+#     return (to_return) }
+# 
+# sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
+# 
+# sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=TRUE) >= 1) & (rowSums(sperm_mat_with_na == 0, na.rm=TRUE) >= 1)),]
 ####### COVERAGE This ends part 2 of method 1
 
-####### COVERAGE This is part 2 of method 2
+####### COVERAGE This is part 2 of method 2A
 # add_to_na <- function(to_add_from, num_not_nas_perRow, num_sperm, x){
 #   to_return <- rep(NA, num_sperm)
 #   where_0 <- sample(which(to_add_from[x,]==0), size=1)
@@ -126,7 +142,26 @@ sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=T
 # sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
 #                                                function (x) add_to_na(sperm_mat, num_not_nan_per_row, num_sperm, x),
 #                                                mc.cores=getOption("mc.cores", threads)))
-####### COVERAGE This ends part 2 of method 2
+####### COVERAGE This ends part 2 of method 2A
+
+####### COVERAGE This is part 2 of method 2B
+add_to_na_variable <- function(to_add_from, num_not_nan_per_row, num_sperm, x){
+  #note that num_non_nan_per_row should be a vector of the same length as the number of rows in to_add_from
+  to_return <- c(rep(NA, num_sperm))
+  where_0 <- sample(which(to_add_from[x,]==0), size=1)
+  where_1 <- sample(which(to_add_from[x,]==1), size=1)
+  to_return[c(where_0, where_1)] <- to_add_from[x,c(where_0, where_1)]
+  if((num_not_nan_per_row[x] -2) >0){
+    to_keep <- sample(c(1:num_sperm)[-c(where_0, where_1)], size=(num_not_nan_per_row[x]-2))
+    to_return[to_keep] <- to_add_from[x,to_keep]
+  }
+  return (to_return)
+} 
+
+sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
+                                              function (x) add_to_na_variable(sperm_mat, num_not_nan_per_row, num_sperm, x),
+                                              mc.cores=getOption("mc.cores", threads)))
+####### COVERAGE This ends part 2 of method 2B
 
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
