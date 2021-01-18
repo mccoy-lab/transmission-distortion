@@ -40,25 +40,31 @@ set.seed(random_seed)
 lambda <- 1
 num_recomb_sites <- rpois(num_sperm, lambda)
 
-#num_not_nan_per_row <- as.integer(args[11])
-num_not_nan_per_row <- 3 #coverage increases as this number increases
-#set up a check that verifies that num_not_nan_per_row is at least 2, otherwise we're not working with heterozygous SNPs
-stopifnot(num_not_nan_per_row >= 2)
+#This is part 1 of method 2
+# #num_not_nan_per_row <- as.integer(args[11])
+# num_not_nan_per_row <- 3 #coverage increases as this number increases
+# #set up a check that verifies that num_not_nan_per_row is at least 2, otherwise we're not working with heterozygous SNPs
+# stopifnot(num_not_nan_per_row >= 2)
 
+# #the poisson distribution function, dpois, is P(x;mu) = e**(-mu) * mu**x / x! Therefore, when x=0 and P(x;mu) is known, mu is -ln(P(x;mu)). Here mu is coverage and we want to find it
+# 
+# num_nas_per_row <- num_sperm - num_not_nan_per_row
+# num_nas <- num_nas_per_row * num_snps
+# num_genotypes <- num_sperm * num_snps
+# missing_genotype_rate <- num_nas / num_genotypes
+
+# coverage <- -log(missing_genotype_rate)
+# message(paste0("The coverage of the this simulation is ", coverage))
+#This ends part 1 of method 2
+
+#This is part 1 of method 1 
 #coverage <- as.numeric(args[11])
-#coverage <- 0.001
-#missing_genotype_rate <- dpois(0, coverage)
+coverage <- 0.001
+missing_genotype_rate <- dpois(0, coverage)
 
-#the poisson distribution function, dpois, is P(x;mu) = e**(-mu) * mu**x / x! Therefore, when x=0 and P(x;mu) is known, mu is -ln(P(x;mu)). Here mu is coverage and we want to find it
-
-num_nas_per_row <- num_sperm - num_not_nan_per_row
-num_nas <- num_nas_per_row * num_snps
 num_genotypes <- num_sperm * num_snps
-missing_genotype_rate <- num_nas / num_genotypes
-
-coverage <- -log(missing_genotype_rate)
-message(paste0("The coverage of the this simulation is ", coverage))
-
+num_nas <- as.integer(num_genotypes * missing_genotype_rate)
+#This ends part 1 of method 1
 
 #start with 2 parental chromosomes of heterozygous sites
 #first parental chromosome
@@ -91,116 +97,128 @@ sperm_mat <- sapply(sim_sperm, "[[", 2)
 first_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
 
-add_to_na <- function(to_add_from, num_not_nas_perRow, num_sperm, x){
-  to_return = rep(NA, num_sperm)
-  where_0 = sample(which(to_add_from[x,]==0), size=1)
-  where_1 = sample(which(to_add_from[x,]==1), size=1)
-  to_return[c(where_0, where_1)] <- to_add_from[x,c(where_0, where_1)]
-  if(num_not_nas_perRow -2 >0){
-    to_keep = sample(c(1:num_sperm)[-c(where_0, where_1)], size=num_not_nas_perRow-2)
-    to_return[to_keep] <- to_add_from[x,to_keep]
-  }
-  return (to_return)
-}
+#This is part 2 of method 1
+add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps ){
+    to_return <- rep(NA, num_snps*num_sperm)
+    coords_to_change <- sample(1:(num_snps*num_sperm), size=(num_snps*num_sperm)-num_nas, replace=FALSE)
+    to_return[coords_to_change] <- as.vector(to_add_from[coords_to_change])
+    to_return <- matrix(to_return, ncol=num_sperm, nrow=num_snps)
+    return (to_return) }
 
-sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
-                                               function (x) add_to_na(sperm_mat, num_not_nan_per_row, num_sperm, x),
-                                               mc.cores=getOption("mc.cores", threads)))
+sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
+
+sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=TRUE) >= 1) & (rowSums(sperm_mat_with_na == 0, na.rm=TRUE) >= 1)),]
+#This ends part 2 of method 1
+
+#This is part 2 of method 2
+# add_to_na <- function(to_add_from, num_not_nas_perRow, num_sperm, x){
+#   to_return <- rep(NA, num_sperm)
+#   where_0 <- sample(which(to_add_from[x,]==0), size=1)
+#   where_1 <- sample(which(to_add_from[x,]==1), size=1)
+#   to_return[c(where_0, where_1)] <- to_add_from[x,c(where_0, where_1)]
+#   if(num_not_nas_perRow -2 >0){
+#     to_keep <- sample(c(1:num_sperm)[-c(where_0, where_1)], size=num_not_nas_perRow-2)
+#     to_return[to_keep] <- to_add_from[x,to_keep]
+#   }
+#   return (to_return)
+# }
+# 
+# sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
+#                                                function (x) add_to_na(sperm_mat, num_not_nan_per_row, num_sperm, x),
+#                                                mc.cores=getOption("mc.cores", threads)))
+#This ends part 2 of method 2
 
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
 sperm_full_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat), sperm_mat)
 #I think sperm_na_df is the df that can be passed to assign_sperm_haplotypes_rm_kw.R directly
 
-# #run the whole pipeline
-# # remove the first column (positions)
-# positions <- sperm_na_df[, 1]
-# sperm_na_df <- sperm_na_df[,-1]
-# 
-# # this function gets the mode of a vector after removing the NAs
-# getmode <- function(v) {
-#   uniqv <- unique(v)
-#   uniqv <- uniqv[!is.na(uniqv)]
-#   uniqv[which.max(tabulate(match(v, uniqv)))]
-# }
-# 
-# # this function replaces 0s with 1s and 1s with 0s in a data frame
-# invertBits <- function(df) {
-#   df[df == 0] <- -1
-#   df[df == 1] <- 0
-#   df[df == -1] <- 1
-#   return(df)
-# }
-# 
-# # overlapping window function from https://stackoverflow.com/questions/8872376/split-vector-with-overlapping-samples-in-r
-# splitWithOverlap <- function(vec, seg.length, overlap) {
-#   starts = seq(1, length(vec), by=seg.length-overlap)
-#   ends   = starts + seg.length - 1
-#   ends[ends > length(vec)] = length(vec)
-#   lapply(1:length(starts), function(i) vec[starts[i]:ends[i]])
-# }
-# 
-# # use overlaps of window length/2
-# windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
-# 
-# # function to reconstruct parental haplotypes
-# reconstruct_hap <- function(input_dt, input_positions, window_indices) {
-#   window_start <- min(window_indices)
-#   window_end <- max(window_indices)
-#   positions_for_window <- input_positions[window_start:window_end]
-#   # compute a distance matrix
-#   d <- dist(t(as.matrix(input_dt)[window_start:window_end,]), method = "binary")
-#   # plut in 0.5 for any NA entries of the distance matrix
-#   d[is.na(d)] <- 0.5
-#   # cluster the distance matrix
-#   tree <- hclust(d, method = "ward.D2")
-#   # plot(tree, cex = 0.1) # uncomment to plot
-#   # cut the tree generated by clustering into two groups (haplotypes)
-#   haplotypes <- cutree(tree, k=2)
-#   # get the names of the sperm cells falling into the two groups
-#   h1_sperm <- names(haplotypes[haplotypes == 1])
-#   h2_sperm <- names(haplotypes[haplotypes == 2])
-#   # reconstruct the original haplotypes by majority vote after inverting the opposite haplotype
-#   h1_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h1_sperm],
-#                                     invertBits(input_dt[window_start:window_end, h2_sperm])),
-#                               1, function(x) getmode(x)))
-#   h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_sperm],
-#                                     invertBits(input_dt[window_start:window_end, h1_sperm])),
-#                               1, function(x) getmode(x)))
-#   return(tibble(index = window_indices, pos = positions_for_window, h1 = h1_inferred))
-# }
-# 
-# # infer the haplotypes within the overlapping windows
-# inferred_haplotypes <- pbmclapply(1:length(windows), 
-#                                   function(x) reconstruct_hap(sperm_na_df, positions, windows[[x]]),
-#                                   mc.cores = getOption("mc.cores", threads))
-# 
-# # stitch together the haplotypes
-# initial_haplotype <- inferred_haplotypes[[1]]
-# for (hap_window in 2:length(windows)) {
-#   olap_haps <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index")
-#   olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
-#   head(olap_haps$h1.x)
-#   head(olap_haps$h1.y)
-#   mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
-#   head(olap_haps$h1.x == olap_haps$h1.y)
-#   message(mean_concordance)
-# }
-#   if (mean_concordance < 0.1) {
-#     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
-#   } else if (mean_concordance < 0.9) {
-#     error(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
-#   }
-#   initial_haplotype <- tibble(index = olap_haps_complete$index,
-#                               pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
-#                                       olap_haps_complete[!is.na(olap_haps_complete$pos.x) &
-#                                                            !is.na(olap_haps_complete$pos.y),]$pos.x,
-#                                       olap_haps_complete[is.na(olap_haps_complete$pos.x),]$pos.y),
-#                               h1 = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$h1.x,
-#                                      olap_haps_complete[!is.na(olap_haps_complete$pos.x) &
-#                                                           !is.na(olap_haps_complete$pos.y),]$h1.x,
-#                                      olap_haps_complete[is.na(olap_haps_complete$pos.x),]$h1.y))
-# }
+#run the whole pipeline
+# remove the first column (positions)
+positions <- sperm_na_df[, 1]
+sperm_na_df <- sperm_na_df[,-1]
+
+# this function gets the mode of a vector after removing the NAs
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv <- uniqv[!is.na(uniqv)]
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# this function replaces 0s with 1s and 1s with 0s in a data frame
+invertBits <- function(df) {
+  df[df == 0] <- -1
+  df[df == 1] <- 0
+  df[df == -1] <- 1
+  return(df)
+}
+
+# overlapping window function from https://stackoverflow.com/questions/8872376/split-vector-with-overlapping-samples-in-r
+splitWithOverlap <- function(vec, seg.length, overlap) {
+  starts = seq(1, length(vec), by=seg.length-overlap)
+  ends   = starts + seg.length - 1
+  ends[ends > length(vec)] = length(vec)
+  lapply(1:length(starts), function(i) vec[starts[i]:ends[i]])
+}
+
+# use overlaps of window length/2
+windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
+
+# function to reconstruct parental haplotypes
+reconstruct_hap <- function(input_dt, input_positions, window_indices) {
+  window_start <- min(window_indices)
+  window_end <- max(window_indices)
+  positions_for_window <- input_positions[window_start:window_end]
+  # compute a distance matrix
+  d <- dist(t(as.matrix(input_dt)[window_start:window_end,]), method = "binary")
+  # plut in 0.5 for any NA entries of the distance matrix
+  d[is.na(d)] <- 0.5
+  # cluster the distance matrix
+  tree <- hclust(d, method = "ward.D2")
+  # plot(tree, cex = 0.1) # uncomment to plot
+  # cut the tree generated by clustering into two groups (haplotypes)
+  haplotypes <- cutree(tree, k=2)
+  # get the names of the sperm cells falling into the two groups
+  h1_sperm <- names(haplotypes[haplotypes == 1])
+  h2_sperm <- names(haplotypes[haplotypes == 2])
+  # reconstruct the original haplotypes by majority vote after inverting the opposite haplotype
+  h1_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h1_sperm],
+                                    invertBits(input_dt[window_start:window_end, h2_sperm])),
+                              1, function(x) getmode(x)))
+  h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_sperm],
+                                    invertBits(input_dt[window_start:window_end, h1_sperm])),
+                              1, function(x) getmode(x)))
+  return(tibble(index = window_indices, pos = positions_for_window, h1 = h1_inferred))
+}
+
+# infer the haplotypes within the overlapping windows
+inferred_haplotypes <- pbmclapply(1:length(windows),
+                                  function(x) reconstruct_hap(sperm_na_df, positions, windows[[x]]),
+                                  mc.cores = getOption("mc.cores", threads))
+
+# stitch together the haplotypes
+initial_haplotype <- inferred_haplotypes[[1]]
+for (hap_window in 2:length(windows)) {
+  olap_haps <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index")
+  olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
+  mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
+  message(mean_concordance)
+  if (mean_concordance < 0.1) {
+    olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
+  } else if (mean_concordance < 0.9) {
+    #error(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
+    message("should produce error message")
+  }
+  initial_haplotype <- tibble(index = olap_haps_complete$index,
+                              pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
+                                      olap_haps_complete[!is.na(olap_haps_complete$pos.x) &
+                                                           !is.na(olap_haps_complete$pos.y),]$pos.x,
+                                      olap_haps_complete[is.na(olap_haps_complete$pos.x),]$pos.y),
+                              h1 = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$h1.x,
+                                     olap_haps_complete[!is.na(olap_haps_complete$pos.x) &
+                                                          !is.na(olap_haps_complete$pos.y),]$h1.x,
+                                     olap_haps_complete[is.na(olap_haps_complete$pos.x),]$h1.y))
+}
 # 
 # complete_haplotypes <- initial_haplotype %>%
 #   mutate(h2 = invertBits(h1))
