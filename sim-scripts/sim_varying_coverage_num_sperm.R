@@ -165,7 +165,9 @@ sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
 
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
+colnames(sperm_na_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
 sperm_full_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat), sperm_mat)
+colnames(sperm_full_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
 #I think sperm_na_df is the df that can be passed to assign_sperm_haplotypes_rm_kw.R directly
 
 #run the whole pipeline
@@ -241,8 +243,7 @@ for (hap_window in 2:length(windows)) {
   if (mean_concordance < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
   } else if (mean_concordance < 0.9) {
-    #error(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
-    message("should produce error message")
+    stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
   }
   initial_haplotype <- tibble(index = olap_haps_complete$index,
                               pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
@@ -254,135 +255,135 @@ for (hap_window in 2:length(windows)) {
                                                           !is.na(olap_haps_complete$pos.y),]$h1.x,
                                      olap_haps_complete[is.na(olap_haps_complete$pos.x),]$h1.y))
 }
-# 
-# complete_haplotypes <- initial_haplotype %>%
-#   mutate(h2 = invertBits(h1))
-# # Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
-# # in h1 at that position, replace the allele with "h1". Do the same for h2.
-# for (i in 1:ncol(sperm_na_df)) {
-#   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h1] <- "h1"
-#   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h2] <- "h2"
-# }
-# 
-# # Scan sperm by sperm to interpret state given emission
-# # First, we initialize our HMM
-# # set denominator for transition probability - one recombination event per chromosome
-# num_snps <- nrow(complete_haplotypes)
-# # two states
-# states <- c("haplotype1", "haplotype2")
-# # probability of state at position x+1 given state at position x
-# hap1Prob <- c(1-(1/num_snps), 1/num_snps)
-# hap2Prob <- c(1/num_snps, 1-(1/num_snps))
-# transProb <- matrix(c(hap1Prob, hap2Prob), 2)
-# # Two emissions (observations): an allele from h1 or an allele from h2
-# emissions <- c("h1","h2")
-# # Prob of emitting an h1 allele, prob of emitting an h2 allele in state `haplotype1`
-# h1ProbEmiss <- c(hapProb, seqError)
-# # Prob of emitting an h1 allele, prob of emitting an h2 allele in state `haplotype2`
-# h2ProbEmiss <- c(seqError, hapProb)
-# emissProb <- matrix(c(h1ProbEmiss, h2ProbEmiss), 2)
-# #build model with the above inputs
-# hmm <- initHMM(States = states,
-#                Symbols = emissions,
-#                transProbs = transProb,
-#                emissionProbs = emissProb)
-# ###### Function to run HMM on an input file
-# # Compute the inferred state using each sperm cell as the input
-# # (Input must be a vector)
-# runHMM <- function(sperm_dt, column_index) {
-#   original_obs <- sperm_dt[,column_index]
-#   inferred_state <- viterbi(hmm, na.omit(sperm_dt[, column_index]))
-#   original_obs[!is.na(original_obs)] <- inferred_state
-#   return(original_obs)
-# }
-# 
-# imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(sperm_na_df),
-#                                                      function(x) runHMM(sperm_na_df, x),
-#                                                      mc.cores = getOption("mc.cores", threads))))
-# colnames(imputed_sperm) <- colnames(sperm_na_df)
-# 
-# # Works on our sperm! Need to make the function work on every sperm in test3
-# # and need to make fill up and down at the end
-# fill_NAs <- function(merged_sperm, col_index) {
-#   sperm_sample <- merged_sperm[,col_index] %>%
-#     rename(sperm = colnames(.)[1]) %>%
-#     mutate(sperm_up = sperm) %>%
-#     mutate(sperm_down = sperm) %>%
-#     fill(sperm_up, .direction = "up") %>%
-#     fill(sperm_down, .direction = "down") %>%
-#     mutate(is_match = (sperm_up == sperm_down)) %>%
-#     replace_na(list(is_match = FALSE))
-#   sperm_sample$sperm_imputed <- as.character(NA)
-#   sperm_sample[sperm_sample$is_match == TRUE,]$sperm_imputed <- sperm_sample[sperm_sample$is_match == TRUE,]$sperm_up
-#   #fill beginning of chromosome NA's
-#   first <- which(!is.na(sperm_sample$sperm_imputed))[1]
-#   sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
-#   #fill end of chromosome NA's
-#   sperm_sample$sperm_imputed <- rev(sperm_sample$sperm_imputed)
-#   first <- which(!is.na(sperm_sample$sperm_imputed))[1]
-#   sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
-#   #reverse chromosome imputation back so it faces the right way
-#   sperm_sample$sperm_imputed <- rev(sperm_sample$sperm_imputed)
-#   return(sperm_sample$sperm_imputed)
-# }
-# 
-# filled_sperm <- as_tibble(do.call(cbind, 
-#                                   pblapply(1:ncol(imputed_sperm),
-#                                            function(x) fill_NAs(imputed_sperm, x))))
-# colnames(filled_sperm) <- colnames(sperm_na_df)
-# 
-# td_test <- function(sperm_matrix, row_index) {
-#   test_row <- sperm_matrix[row_index,]
-#   gt_vector <- unlist(test_row)[-1]
-#   one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
-#   two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
-#   p_value <- binom.test(c(one_count, two_count))$p.value
-#   return(c(p_value, one_count, two_count))
-# }
-# 
-# #df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm), 
-# #                                             function(x) td_test(filled_sperm, x),
-# #                                             mc.cores=getOption("mc.cores", threads))) %>%
-# #  as_tibble() %>% 
-# #  add_column(positions) #bind the positions vector to df_counts_pvals
-# #colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
-# #filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
-# #write_csv(df_counts_pvals, filename_df)
-# 
-# #find recombination spots
-# find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
-#   ident <- identities[x]
-#   input_tibble <- input_matrix[, x] %>%
-#     mutate(., index = row_number()) %>%
-#     mutate(., positions = genomic_positions)
-#   complete_cases_tibble <- input_tibble[complete.cases(input_tibble),]
-#   input_vec <- as.factor(complete_cases_tibble[[1]])
-#   switch_indices <- which(input_vec[-1] != input_vec[-length(input_vec)])
-#   switch_indices_input <- complete_cases_tibble[switch_indices,]$index
-#   crossover_start <- input_tibble[switch_indices_input,]$positions
-#   rev_input_tibble <- arrange(input_tibble, -index) %>%
-#     mutate(., index = row_number())
-#   complete_cases_rev_tibble <- rev_input_tibble[complete.cases(rev_input_tibble),]
-#   rev_input_vec <- as.factor(complete_cases_rev_tibble[[1]])
-#   rev_switch_indices <- which(rev_input_vec[-1] != rev_input_vec[-length(rev_input_vec)])
-#   rev_switch_indices_input <- complete_cases_rev_tibble[rev_switch_indices,]$index
-#   crossover_end <- rev(rev_input_tibble[rev_switch_indices_input,]$positions)
-#   recomb_spots <- tibble(Ident = ident, Genomic_start = crossover_start, Genomic_end = crossover_end)
-#   return(recomb_spots)
-# }
-# 
-# idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
-# recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
-#                                               function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
-#                                               mc.cores=getOption("mc.cores", threads))) %>% 
-#   right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+
+complete_haplotypes <- initial_haplotype %>%
+  mutate(h2 = invertBits(h1))
+# Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
+# in h1 at that position, replace the allele with "h1". Do the same for h2.
+for (i in 1:ncol(sperm_na_df)) {
+  sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h1] <- "h1"
+  sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h2] <- "h2"
+}
+
+# Scan sperm by sperm to interpret state given emission
+# First, we initialize our HMM
+# set denominator for transition probability - one recombination event per chromosome
+num_snps <- nrow(complete_haplotypes)
+# two states
+states <- c("haplotype1", "haplotype2")
+# probability of state at position x+1 given state at position x
+hap1Prob <- c(1-(1/num_snps), 1/num_snps)
+hap2Prob <- c(1/num_snps, 1-(1/num_snps))
+transProb <- matrix(c(hap1Prob, hap2Prob), 2)
+# Two emissions (observations): an allele from h1 or an allele from h2
+emissions <- c("h1","h2")
+# Prob of emitting an h1 allele, prob of emitting an h2 allele in state `haplotype1`
+h1ProbEmiss <- c(hapProb, seqError)
+# Prob of emitting an h1 allele, prob of emitting an h2 allele in state `haplotype2`
+h2ProbEmiss <- c(seqError, hapProb)
+emissProb <- matrix(c(h1ProbEmiss, h2ProbEmiss), 2)
+#build model with the above inputs
+hmm <- initHMM(States = states,
+               Symbols = emissions,
+               transProbs = transProb,
+               emissionProbs = emissProb)
+###### Function to run HMM on an input file
+# Compute the inferred state using each sperm cell as the input
+# (Input must be a vector)
+runHMM <- function(sperm_dt, column_index) {
+  original_obs <- sperm_dt[,column_index]
+  inferred_state <- viterbi(hmm, na.omit(sperm_dt[, column_index]))
+  original_obs[!is.na(original_obs)] <- inferred_state
+  return(original_obs)
+}
+
+imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(sperm_na_df),
+                                                     function(x) runHMM(sperm_na_df, x),
+                                                     mc.cores = getOption("mc.cores", threads))))
+colnames(imputed_sperm) <- colnames(sperm_na_df)
+
+# Works on our sperm! Need to make the function work on every sperm in test3
+# and need to make fill up and down at the end
+fill_NAs <- function(merged_sperm, col_index) {
+  sperm_sample <- merged_sperm[,col_index] %>%
+    rename(sperm = colnames(.)[1]) %>%
+    mutate(sperm_up = sperm) %>%
+    mutate(sperm_down = sperm) %>%
+    fill(sperm_up, .direction = "up") %>%
+    fill(sperm_down, .direction = "down") %>%
+    mutate(is_match = (sperm_up == sperm_down)) %>%
+    replace_na(list(is_match = FALSE))
+  sperm_sample$sperm_imputed <- as.character(NA)
+  sperm_sample[sperm_sample$is_match == TRUE,]$sperm_imputed <- sperm_sample[sperm_sample$is_match == TRUE,]$sperm_up
+  #fill beginning of chromosome NA's
+  first <- which(!is.na(sperm_sample$sperm_imputed))[1]
+  sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
+  #fill end of chromosome NA's
+  sperm_sample$sperm_imputed <- rev(sperm_sample$sperm_imputed)
+  first <- which(!is.na(sperm_sample$sperm_imputed))[1]
+  sperm_sample$sperm_imputed[1:(first-1)] <- sperm_sample$sperm_imputed[first]
+  #reverse chromosome imputation back so it faces the right way
+  sperm_sample$sperm_imputed <- rev(sperm_sample$sperm_imputed)
+  return(sperm_sample$sperm_imputed)
+}
+
+filled_sperm <- as_tibble(do.call(cbind,
+                                  pblapply(1:ncol(imputed_sperm),
+                                           function(x) fill_NAs(imputed_sperm, x))))
+colnames(filled_sperm) <- colnames(sperm_na_df)
+
+td_test <- function(sperm_matrix, row_index) {
+  test_row <- sperm_matrix[row_index,]
+  gt_vector <- unlist(test_row)[-1]
+  one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
+  two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
+  p_value <- binom.test(c(one_count, two_count))$p.value
+  return(c(p_value, one_count, two_count))
+}
+
+#df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
+#                                             function(x) td_test(filled_sperm, x),
+#                                             mc.cores=getOption("mc.cores", threads))) %>%
+#  as_tibble() %>%
+#  add_column(positions) #bind the positions vector to df_counts_pvals
+#colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
+#filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
+#write_csv(df_counts_pvals, filename_df)
+
+#find recombination spots
+find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
+  ident <- identities[x]
+  input_tibble <- input_matrix[, x] %>%
+    mutate(., index = row_number()) %>%
+    mutate(., positions = genomic_positions)
+  complete_cases_tibble <- input_tibble[complete.cases(input_tibble),]
+  input_vec <- as.factor(complete_cases_tibble[[1]])
+  switch_indices <- which(input_vec[-1] != input_vec[-length(input_vec)])
+  switch_indices_input <- complete_cases_tibble[switch_indices,]$index
+  crossover_start <- input_tibble[switch_indices_input,]$positions
+  rev_input_tibble <- arrange(input_tibble, -index) %>%
+    mutate(., index = row_number())
+  complete_cases_rev_tibble <- rev_input_tibble[complete.cases(rev_input_tibble),]
+  rev_input_vec <- as.factor(complete_cases_rev_tibble[[1]])
+  rev_switch_indices <- which(rev_input_vec[-1] != rev_input_vec[-length(rev_input_vec)])
+  rev_switch_indices_input <- complete_cases_rev_tibble[rev_switch_indices,]$index
+  crossover_end <- rev(rev_input_tibble[rev_switch_indices_input,]$positions)
+  recomb_spots <- tibble(Ident = ident, Genomic_start = crossover_start, Genomic_end = crossover_end)
+  return(recomb_spots)
+}
+
+idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
+recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
+                                              function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
+                                              mc.cores=getOption("mc.cores", threads))) %>%
+  right_join(., tibble(Ident = idents_for_csv), by = "Ident")
 
 #Prepare a dataframe for the true crossover locations that can be passed to bedr
 sperm_ident <- paste0(rep("sperm", num_sperm), 1:num_sperm, "_")
 names(crossover_indices) <- sperm_ident
 unlist_ci <- unlist(crossover_indices, use.names=TRUE) #just a list with a single row for each crossover, rowname corresponds to the sperm _1, _2, etc for sperm with more than one CO
 #bedr has to have different starts and ends and cannot handle NAs
-ci_df <- data.frame(chr=rep(as.character("chrT"), length(unlist_ci)), start=(unlist_ci-1), stop=(unlist_ci+1))
+ci_df <- data.frame(chr=rep(as.character("chrT"), length(unlist_ci)), start=(unlist_ci-1), end=(unlist_ci+1))
 row.names(ci_df) <- names(unlist_ci)
 truth_nona_df <- drop_na(ci_df) #this one has all valid regions for bedr
 truth_onlyna_df <- ci_df[is.na(ci_df$start),] #this one is to check all the ones that don't have any recombination spots
@@ -390,8 +391,8 @@ truth_nona_df_sort <- bedr.sort.region(truth_nona_df) #these are the true recomb
 
 
 #make another bedr compatible dataframe for the predicted crossover locations
-split_idents <- str_split(recomb_spots$Ident, "_", simplify=TRUE)
-recomb_spots_df <- data.frame(chr=as.character(split_idents[,2]), start=recomb_spots$Genomic_start, end=recomb_spots$Genomic_end)
+split_idents <- str_split(recomb_spots_all$Ident, "_", simplify=TRUE)
+recomb_spots_df <- data.frame(chr=as.character(split_idents[,2]), start=recomb_spots_all$Genomic_start, end=recomb_spots_all$Genomic_end)
 row.names(recomb_spots_df) <- make.names(paste0(split_idents[,3], "_"), unique=TRUE)
 #bedr cannot handle NAs
 pred_nona_df <- drop_na(recomb_spots_df) #this one has all valid regions for bedr
@@ -401,32 +402,40 @@ pred_nona_df_sort <- bedr.sort.region(pred_nona_df) #these are the predicted rec
 truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
                   method = "intersect",
                   params = "-loj -sorted") #those that aren't overlapping will be reported as NULL for b (. -1 -1). Those are fn
-colnames(truth_pred_int) <- c("truth", "pred_chr", "pred_start", "pred_end")
-pred_v <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
-                method = "intersect",
-                params = "-v -sorted") #length of this is fp
+colnames(truth_pred_int) <- c("truth_chr", "truth_start", "truth_end", "pred_chr", "pred_start", "pred_end")
+pred_truth_int <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
+                       method = "intersect",
+                       params = "-loj -sorted")
+colnames(pred_truth_int) <- c("pred_chr", "pred_start", "pred_end", "truth_chr", "truth_start", "truth_end")
+pred_v <- pred_truth_int[pred_truth_int$truth_chr == ".",] #nrow of this is fp
+
+# pred_v <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
+#                 method = "intersect",
+#                 params = "-v -sorted") #length of this is fp
 
 truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
 pred_idents <- paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end)
 tp_cons <- length(unique(pred_idents))
-tp_lib <- dim(truth_pred_into_nona)[0]
+tp_lib <- nrow(truth_pred_int)
 
-fp <- length(pred_v)
+#fp <- length(pred_v)
 
-fn_pt3 <- dim(truth_pred_int_nona)[0] - tp_lib
-fn_pt1 <- dim(truth_pred_int[truth_pred_int$pred_chr == ".",])[0]
+fp <- nrow(pred_v)
+
+fn_pt3 <- tp_lib - nrow(truth_pred_int_nona)
+fn_pt1 <- nrow(truth_pred_int[truth_pred_int$pred_chr == ".",])
 fn_pt2 <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df))) #rownames in the prediction but not in the truth
 fn_lib <- fn_pt1 + fn_pt2
 fn_cons <- fn_pt1 + fn_pt2 + fn_pt3
 
-tn <- dim(merge(truth_onlyna_df, pred_onlyna_df, by=0))[0]
+tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
 
 metrics <- function(tp, fp, tn, fn){
   precision <- tp/(tp+fp)
   recall <- tp/(tp+fn)
   accuracy <- (tp + tn)/(tp + tn + fp + fn)
   f1 <- (2*precision*recall)/(precision + recall)
-  specificty <- tn/(tn+fp)
+  specificity <- tn/(tn+fp)
   fdr <- fp/(tp+fp)
   fpr <- fp/(tn+fp)
   metric_list <- list(precision=precision, 
