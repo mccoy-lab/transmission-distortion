@@ -474,6 +474,7 @@ hist(real_reads, breaks=50)
 num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - hap1) != 0), sum((complete_haplotypes$h1 - hap2) != 0))
 #num_mismatch_parental2 <- min(sum((complete_haplotypes$h2 - hap1) != 0), sum((complete_haplotypes$h2 - hap2) != 0))
 accuracy_parental1 <- (num_snps - num_mismatch_parental1) / num_snps * 100
+message(paste0("Parental haplotype reconstruction accuracy: ", accuracy_parental1))
 #accuracy_parental2 <- (num_snps - num_mismatch_parental2) / num_snps
 #I think that _parental2 here automatically matches _parental1 because they're inverted bits of each other
 
