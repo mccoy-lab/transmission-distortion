@@ -31,6 +31,7 @@ num_sperm <- 1000 #coverage decreases as this number increases
 
 #num_snps <- as.integer(args[8])
 num_snps <- 30000 #coverage doesn't seem to change with this number
+#num_snps <- 190000
 
 #random_seed <- as.integer(args[9])
 random_seed <- 42
@@ -64,7 +65,9 @@ num_not_nan_per_row_base <- 2 #coverage increases as this number increases
 stopifnot(num_not_nan_per_row_base >= 2)
 
 #add to the base num_not_nan_per_row_base to find out the actual number of not NAs for each row. We'll now have a vector rather than a single integer
-num_not_nan_per_row <- num_not_nan_per_row_base + rpois(num_snps, lambda)
+#num_not_nan_per_row <- num_not_nan_per_row_base + rpois(num_snps, lambda)
+#num_not_nan_per_row <- num_not_nan_per_row_base + rpois(num_snps, 4)
+num_not_nan_per_row <- num_not_nan_per_row_base + rnbinom(num_snps, 2, 0.09)
 num_genotypes <- num_sperm * num_snps
 num_nas <- num_genotypes - sum(num_not_nan_per_row)
 missing_genotype_rate <- num_nas / num_genotypes
@@ -73,14 +76,14 @@ message(paste0("The coverage of this simulation is ", coverage))
 ####### COVERAGE This ends part 1 of method 2B
 
 
-####### COVERAGE This is part 1 of method 1 
-#coverage <- as.numeric(args[11])
-# coverage <- 0.001
+# ###### COVERAGE This is part 1 of method 1
+# coverage <- as.numeric(args[11])
+# coverage <- 0.01
 # missing_genotype_rate <- dpois(0, coverage)
 # 
 # num_genotypes <- num_sperm * num_snps
 # num_nas <- as.integer(num_genotypes * missing_genotype_rate)
-####### COVERAGE This ends part 1 of method 1
+# ###### COVERAGE This ends part 1 of method 1
 
 #start with 2 parental chromosomes of heterozygous sites
 #first parental chromosome
@@ -113,7 +116,7 @@ sperm_mat <- sapply(sim_sperm, "[[", 2)
 first_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
 
-####### COVERAGE This is part 2 of method 1
+# ###### COVERAGE This is part 2 of method 1
 # add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps ){
 #     to_return <- rep(NA, num_snps*num_sperm)
 #     coords_to_change <- sample(1:(num_snps*num_sperm), size=(num_snps*num_sperm)-num_nas, replace=FALSE)
@@ -122,9 +125,11 @@ crossover_indices <- sapply(sim_sperm, "[[", 1)
 #     return (to_return) }
 # 
 # sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
+# message(nrow(sperm_mat_with_na))
 # 
 # sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=TRUE) >= 1) & (rowSums(sperm_mat_with_na == 0, na.rm=TRUE) >= 1)),]
-####### COVERAGE This ends part 2 of method 1
+# message(nrow(sperm_mat_with_na))
+# ###### COVERAGE This ends part 2 of method 1
 
 ####### COVERAGE This is part 2 of method 2A
 # add_to_na <- function(to_add_from, num_not_nas_perRow, num_sperm, x){
@@ -156,12 +161,20 @@ add_to_na_variable <- function(to_add_from, num_not_nan_per_row, num_sperm, x){
     to_return[to_keep] <- to_add_from[x,to_keep]
   }
   return (to_return)
-} 
+}
 
 sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
                                               function (x) add_to_na_variable(sperm_mat, num_not_nan_per_row, num_sperm, x),
                                               mc.cores=getOption("mc.cores", threads)))
 ####### COVERAGE This ends part 2 of method 2B
+
+# sperm_mat_with_na <- sperm_mat #copy matrix to a new matrix where we'll add in NAs so that we retain the full original knowledge
+# sperm_mat_with_na <- as.vector(sperm_mat_with_na)
+# coords_to_change <- sample(1:num_genotypes, size=num_nas, replace=FALSE)
+# sperm_mat_with_na[coords_to_change] <- NA
+# sperm_mat_with_na <- matrix(sperm_mat_with_na, ncol=num_sperm, nrow=num_snps)
+# 
+# sperm_mat_with_na <- sperm_mat_with_na[((rowSums(sperm_mat_with_na == 1, na.rm=TRUE) >= 1) & (rowSums(sperm_mat_with_na == 0, na.rm=TRUE) >= 1)),]
 
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
@@ -449,3 +462,33 @@ metrics <- function(tp, fp, tn, fn){
 
 metrics_cons <- metrics(tp_cons, fp, tn, fn_cons)
 metrics_lib <- metrics(tp_lib, fp, tn, fn_lib)
+
+real_reads <- rowSums(!is.na(sperm_na_df))
+hist(real_reads, breaks=50)
+
+##plot the resolution of recombination break point regions
+
+## Assessing the accuracy of parental haplotype reconstruction
+#complete_haplotypes compared to simulated hap1 and hap2
+num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - hap1) != 0), sum((complete_haplotypes$h1 - hap2) != 0))
+#num_mismatch_parental2 <- min(sum((complete_haplotypes$h2 - hap1) != 0), sum((complete_haplotypes$h2 - hap2) != 0))
+accuracy_parental1 <- (num_snps - num_mismatch_parental1) / num_snps
+#accuracy_parental2 <- (num_snps - num_mismatch_parental2) / num_snps
+#I think that _parental2 here automatically matches _parental1 because they're inverted bits of each other
+
+
+## Assessing the accuracy of gamete haplotype reconstruction
+re_recode_gametes <- function(dt, complete_haplotypes) {
+  to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
+  for (i in 1:ncol(dt)) {
+    locs_h1 <- dt[,i] == "haplotype1"
+    locs_h1[which(is.na(locs_h1))] <- FALSE
+    locs_h2 <- dt[,i] == "haplotype2"
+    locs_h2[which(is.na(locs_h2))] <- FALSE
+    to_return[locs_h1, i] <- complete_haplotypes$h1[locs_h1]
+    to_return[locs_h2, i] <- complete_haplotypes$h2[locs_h2]
+  }
+  return(to_return)
+}
+
+filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
