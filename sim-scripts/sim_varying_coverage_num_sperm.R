@@ -5,6 +5,7 @@ library(stringr)
 library(pbapply)
 library(pbmcapply)
 library(HMM)
+library(ggplot2)
 
 #args <- commandArgs(trailingOnly = TRUE)
 #sampleName <- args[1]
@@ -472,7 +473,7 @@ hist(real_reads, breaks=50)
 #complete_haplotypes compared to simulated hap1 and hap2
 num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - hap1) != 0), sum((complete_haplotypes$h1 - hap2) != 0))
 #num_mismatch_parental2 <- min(sum((complete_haplotypes$h2 - hap1) != 0), sum((complete_haplotypes$h2 - hap2) != 0))
-accuracy_parental1 <- (num_snps - num_mismatch_parental1) / num_snps
+accuracy_parental1 <- (num_snps - num_mismatch_parental1) / num_snps * 100
 #accuracy_parental2 <- (num_snps - num_mismatch_parental2) / num_snps
 #I think that _parental2 here automatically matches _parental1 because they're inverted bits of each other
 
@@ -492,3 +493,9 @@ re_recode_gametes <- function(dt, complete_haplotypes) {
 }
 
 filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
+num_mismatches_sperm_haplotype <- colSums((filled_sperm_recode - sperm_full_df[,-1]) != 0, na.rm = TRUE)
+num_nas_byCol <- colSums(is.na(filled_sperm_recode))
+rawAccuracy <- data.frame(val=((num_snps - num_mismatches_sperm_haplotype)/num_snps * 100), name="Raw") 
+correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
+accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
+ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method")
