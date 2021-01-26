@@ -14,10 +14,12 @@ threads <- as.integer(args[6])
 window_length <- as.integer(args[7]) #2500 default, if error raised -- retry with 1000 and 5000 also
 
 # load the data
-dt <- read_delim(input_file, delim = "\t") %>%
-  pivot_wider(., names_from = "cell", values_from = "gt") %>%
-  arrange(., pos) %>%
-  as.data.frame()
+# dt <- read_delim(input_file, delim = "\t") %>%
+#   pivot_wider(., names_from = "cell", values_from = "gt") %>%
+#   arrange(., pos) %>%
+#   as.data.frame()
+
+dt <- read_delim(input_file, delim = "\t")
 
 # remove the first column (positions)
 positions <- dt[, 1]
@@ -77,6 +79,7 @@ reconstruct_hap <- function(input_dt, input_positions, window_indices) {
 }
 
 # infer the haplotypes within the overlapping windows
+before_time <- Sys.time()
 inferred_haplotypes <- pbmclapply(1:length(windows), 
                                   function(x) reconstruct_hap(dt, positions, windows[[x]]),
                                   mc.cores = getOption("mc.cores", threads))
@@ -105,6 +108,13 @@ for (hap_window in 2:length(windows)) {
 
 complete_haplotypes <- initial_haplotype %>%
   mutate(h2 = invertBits(h1))
+after_time <- Sys.time()
+time_to_impute <- after_time - before_time
+message(paste0("Time used for inferring parental haplotypes: ", time_to_impute))
+
+filename_hap <- paste0(outDir, sampleName, "_", chrom, "_parental_hap.csv")
+write_csv(complete_haplotypes$h1, filename_hap)
+
 # Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
 # in h1 at that position, replace the allele with "h1". Do the same for h2.
 for (i in 1:ncol(dt)) {
@@ -144,10 +154,15 @@ runHMM <- function(sperm_dt, column_index) {
   return(original_obs)
 }
 
+before_impute <- Sys.time()
 imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(dt),
-                                                     function(x) runHMM(dt, x),
-                                                     mc.cores = getOption("mc.cores", threads))))
+                                                 function(x) runHMM(dt, x),
+                                                 mc.cores = getOption("mc.cores", threads))))
+after_impute <- Sys.time()
+time_to_impute <- after_impute - before_impute
+message(paste0("Time used for imputing sperm haplotypes: ", time_to_impute))
 colnames(imputed_sperm) <- colnames(dt)
+
 # Works on our sperm! Need to make the function work on every sperm in test3
 # and need to make fill up and down at the end
 fill_NAs <- function(merged_sperm, col_index) {
