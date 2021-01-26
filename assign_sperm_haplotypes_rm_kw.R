@@ -19,7 +19,7 @@ window_length <- as.integer(args[7]) #2500 default, if error raised -- retry wit
 #   arrange(., pos) %>%
 #   as.data.frame()
 
-dt <- read_delim(input_file, delim = "\t")
+dt <- read_delim(input_file, delim = "\t") %>% as.data.frame()
 
 # remove the first column (positions)
 positions <- dt[, 1]
@@ -83,16 +83,16 @@ before_time <- Sys.time()
 inferred_haplotypes <- pbmclapply(1:length(windows), 
                                   function(x) reconstruct_hap(dt, positions, windows[[x]]),
                                   mc.cores = getOption("mc.cores", threads))
-
 # stitch together the haplotypes
 initial_haplotype <- inferred_haplotypes[[1]]
 for (hap_window in 2:length(windows)) {
   olap_haps <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index")
   olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
-  mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
-  if (mean_concordance < 0.1) {
+  #mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
+  mean_concordance2 <- mean(olap_haps$h1.x == olap_haps$h1.y, na.rm=TRUE)
+  if (mean_concordance2 < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
-  } else if (mean_concordance < 0.9) {
+  } else if (mean_concordance2 < 0.9) {
     stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
   }
   initial_haplotype <- tibble(index = olap_haps_complete$index,
@@ -105,7 +105,6 @@ for (hap_window in 2:length(windows)) {
                                                           !is.na(olap_haps_complete$pos.y),]$h1.x,
                                      olap_haps_complete[is.na(olap_haps_complete$pos.x),]$h1.y))
 }
-
 complete_haplotypes <- initial_haplotype %>%
   mutate(h2 = invertBits(h1))
 after_time <- Sys.time()
@@ -113,7 +112,7 @@ time_to_impute <- after_time - before_time
 message(paste0("Time used for inferring parental haplotypes: ", time_to_impute))
 
 filename_hap <- paste0(outDir, sampleName, "_", chrom, "_parental_hap.csv")
-write_csv(complete_haplotypes$h1, filename_hap)
+write_csv(complete_haplotypes, filename_hap)
 
 # Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
 # in h1 at that position, replace the allele with "h1". Do the same for h2.
