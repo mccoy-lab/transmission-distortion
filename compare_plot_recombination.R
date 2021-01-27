@@ -71,6 +71,14 @@ ggplot() +
   ggtitle("compare recomb spots - donor 10 chromosome 1") + 
   theme_minimal()
 
+# Try to get the adjusted axes, such that their recombination spots are above the haplotypes and ours are below 
+# https://stackoverflow.com/questions/42461993/how-to-shift-x-axis-positions-of-two-geoms-relative-to-each-other
+# I have NOT tried this 
+# ggplot(data = sperm_crossovers, aes(x = genomic_start, y = cell_ID)) +
+#   geom_point() +
+#   geom_point(data = our_calls, aes(x = genomic_start, y = as.numeric(cell_ID) - 0.2)) +
+#   geom_point(data = their_calls, aes(x = genomic_start, y = as.numeric(cell_ID) + 0.2))
+
 
 
 #################
