@@ -7,35 +7,53 @@ library(pbmcapply)
 library(HMM)
 library(ggplot2)
 
+args <- commandArgs(trailingOnly = TRUE)
+#sampleName <- args[1]
+#chrom <- args[2]
+#stopifnot(grepl("chr", chrom, fixed=TRUE))
+#outDir <- args[3]
+#threads <- as.integer(args[4])
 sampleName <- "simulation"
 chrom <- "chrT"
 outDir <- "tmp"
 threads <- 2L
 
+#seqError <- as.numeric(args[5])
+#window_length <- as.integer(args[6])
 seqError <- 0.005
 hapProb <- 1 - seqError
 window_length <- 2500
 
-#num_sperm <- 1000 #coverage decreases as this number increases
+#num_sperm <- as.integer(args[7])
+#num_snps <- as.integer(args[8])
+#num_not_nan_per_row_base <- as.integer(args[9])
+#num_sperm <- 15 #coverage decreases as this number increases
 num_sperm <- 1000
 num_snps <- 30000 #coverage doesn't seem to change with this number
-#num_not_nan_per_row_base <- 2 #coverage increases as this number increases
-num_not_nan_per_row_base <- 2
+num_not_nan_per_row_base <- 2 #coverage increases as this number increases
 #set up a check that verifies that num_not_nan_per_row is at least 2. Otherwise we're not working with heterozygous SNPs
 stopifnot(num_not_nan_per_row_base >= 2)
 
+#random_seed <- as.integer(args[10])
 random_seed <- 42
 set.seed(random_seed)
 
+#lambda <- as.integer(args[11])
 lambda <- 1
 num_recomb_sites <- rpois(num_sperm, lambda)
 
+#nbinom_param <- as.integer(args[12])
+#nbinom_prob <- as.numeric(args[13])
+nbinom_param <- 2
+nbinom_prob <- 0.09
+
+#add_seq_error <- as.logical(args[14])
+#add_de_novo_mut <- as.logical(args[15])
 add_seq_error <- TRUE
 add_de_novo_mut <- FALSE
 
 #add to the base num_not_nan_per_row_base to find out the actual number of not NAs for each row. We'll now have a vector rather than a single integer
-#num_not_nan_per_row <- pmin(num_sperm, num_not_nan_per_row_base + rnbinom(num_snps, 2, 0.09))
-num_not_nan_per_row <- pmin(num_sperm, num_not_nan_per_row_base + rnbinom(num_snps, 1,  0.35))
+num_not_nan_per_row <- pmin(num_sperm, num_not_nan_per_row_base + rnbinom(num_snps, nbinom_param, nbinom_prob)) #coverage increases directly with the first param and decreases inversely from the second param (probability) 
 num_genotypes <- num_sperm * num_snps
 num_nas <- num_genotypes - sum(num_not_nan_per_row)
 missing_genotype_rate <- num_nas / num_genotypes
