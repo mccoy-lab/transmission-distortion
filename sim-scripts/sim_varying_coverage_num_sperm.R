@@ -49,8 +49,10 @@ nbinom_prob <- 0.09
 
 #add_seq_error <- as.logical(args[14])
 #add_de_novo_mut <- as.logical(args[15])
+#seqError_add <- as.numeric(args[16])
 add_seq_error <- TRUE
 add_de_novo_mut <- FALSE
+seqError_add <- 0.005
 
 #add to the base num_not_nan_per_row_base to find out the actual number of not NAs for each row. We'll now have a vector rather than a single integer
 num_not_nan_per_row <- pmin(num_sperm, num_not_nan_per_row_base + rnbinom(num_snps, nbinom_param, nbinom_prob)) #coverage increases directly with the first param and decreases inversely from the second param (probability) 
@@ -73,22 +75,24 @@ generate_sperm <- function(parental_haplotypes, n_crossovers){
   init_hap_index <- sample(1:2, 1)
   init_hap <- parental_haplotypes[,init_hap_index]
   if (n_crossovers == 0) {
-    return(list(NA, init_hap, init_hap_index))
+    return(list(NA, init_hap, rep(init_hap_index, length(init_hap))))
   } else {
     n_snps <- length(init_hap)
     crossover_indices <- sample(1:n_snps, n_crossovers)
     crossover_indices <- crossover_indices[order(crossover_indices)]
     recombined_hap <- init_hap
+    recombined_hap_index <- rep(init_hap_index-1, n_snps) #recode 1's to 0's or 2's to 1's and store the initial haplotype at all SNP locations 
     for (crossover in crossover_indices) { #switch haplotypes at the crossover index
       recombined_hap <- c(recombined_hap[1:(crossover-1)], abs(1- recombined_hap[crossover:n_snps]))
+      recombined_hap_index <- c(recombined_hap_index[1:(crossover-1)], abs(recombined_hap_index[crossover:n_snps]-1))
     }
-    return(list(crossover_indices, recombined_hap, init_hap_index))
+    return(list(crossover_indices, recombined_hap, recombined_hap_index+1)) #re-recode recombined_hap_index so that 1's are 2's and 0' are 1's
   }
 }
 
 sim_sperm <- lapply(1:num_sperm, function(x) generate_sperm(parental_haps, num_recomb_sites[x]))
 sperm_mat <- sapply(sim_sperm, "[[", 2)
-first_haps <- sapply(sim_sperm, "[[", 3)
+sperm_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
 
 add_to_na_variable <- function(to_add_from, num_not_nan_per_row, num_sperm, x){
@@ -109,7 +113,7 @@ sperm_mat_with_na <- do.call(rbind, pbmclapply(1:num_snps,
                                               mc.cores=getOption("mc.cores", threads)))
 
 if (add_seq_error){
-  num_bits_to_flip <- as.integer(seqError * (num_genotypes - num_nas))
+  num_bits_to_flip <- as.integer(seqError_add * (num_genotypes - num_nas))
   switched_bit_mat <- c(abs(1-sperm_mat_with_na)) #make a switched bit matrix compared to sperm_mat_with_na
   where_locs <- sample(which(!is.na(switched_bit_mat)), size=num_bits_to_flip) #randomly pick num_bits_to_flip locations
   sperm_mat_with_na <- c(sperm_mat_with_na)
@@ -117,6 +121,11 @@ if (add_seq_error){
   sperm_mat_with_na <- matrix(sperm_mat_with_na, nrow=num_snps, ncol=num_sperm)
 }
 
+if (add_de_novo_mut){
+  #how many parental_dnms
+  parental_with_dnm <- sample(1:2, 1)
+  num_sperm_affected_per_dnm <- 0 #gamma dist
+}
 
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
@@ -190,14 +199,15 @@ inferred_haplotypes <- pbmclapply(1:length(windows),
 
 # stitch together the haplotypes
 initial_haplotype <- inferred_haplotypes[[1]]
-for (hap_window in 2:length(windows)) {
+for (hap_window in 1:length(windows)) {
   olap_haps <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index")
   olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
-  mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
-  if (mean_concordance < 0.1) {
+  #mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
+  mean_concordance2 <- mean(olap_haps$h1.x == olap_haps$h1.y, na.rm=TRUE)
+  if (mean_concordance2 < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
-  } else if (mean_concordance < 0.9) {
-    stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
+  } else if (mean_concordance2 < 0.9) {
+    stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance2))
   }
   initial_haplotype <- tibble(index = olap_haps_complete$index,
                               pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
@@ -295,14 +305,14 @@ td_test <- function(sperm_matrix, row_index) {
   return(c(p_value, one_count, two_count))
 }
 
-#df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
-#                                             function(x) td_test(filled_sperm, x),
-#                                             mc.cores=getOption("mc.cores", threads))) %>%
-#  as_tibble() %>%
-#  add_column(positions) #bind the positions vector to df_counts_pvals
-#colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
-#filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
-#write_csv(df_counts_pvals, filename_df)
+df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
+                                            function(x) td_test(filled_sperm, x),
+                                            mc.cores=getOption("mc.cores", threads))) %>%
+ as_tibble() %>%
+ add_column(positions) #bind the positions vector to df_counts_pvals
+colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
+filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
+write_csv(df_counts_pvals, filename_df)
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
