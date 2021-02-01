@@ -129,24 +129,30 @@ if (add_seq_error){
 if (add_de_novo_mut){
  num_dnm <- rpois(1, lambda) + 1 #make sure this is greater than 0 by adding one
   num_sperm_affected_per_dnm <- ceiling(rgamma(num_dnm, de_novo_alpha, scale=de_novo_beta))
-  parentals_with_dnm <- sample(1:2, num_dnm)
+  parentals_with_dnm <- sample(1:2, num_dnm, replace=TRUE)
   for (i in 1:num_dnm){ #for every parental dnm
     parental_with_dnm <- parentals_with_dnm[i]
-    num_sperm_affected <- num_sperm_affected_per_dnm[i]
+    sperm_can_be_affected <- which(sperm_haps[row_loc, ]==parental_with_dnm)
+    num_sperm_affected <- min(num_sperm_affected_per_dnm[i], length(sperm_can_be_affected))
     row_loc <- sample(1:num_snps, 1) #pick random row which we'll add this new de novo mutation after
-    sperm_can_be_affected <- which(based_on[row_loc, ]==parental_with_dnm)
     affected_sperm <- sort(sample(sperm_can_be_affected, num_sperm_affected))
     new_row_haps <- rep(abs((parental_with_dnm - 1)-1)+1, num_sperm)
     new_row_haps[sperm_can_be_affected] <- parental_with_dnm
     new_row_vals <- rep(0, num_sperm)
     new_row_vals[affected_sperm] <- 1
-    #NEED TO DO -- add sparsity in
+    sperm_mat <- rbind(sperm_mat[1:row_loc, ], new_row_vals, sperm_mat[(row_loc+1):num_snps, ])
+    #add sparsity in
+    missing_genotype_rate <- dpois(0, coverage)
+    num_nas_to_add <- floor(num_sperm * missing_genotype_rate)
+    stopifnot(num_nas_to_add <= num_sperm - 2)
+    change_indices <- sample(1:num_sperm, num_nas_to_add)
+    new_row_vals[change_indices] <- NA
     #add in new SNP line
-    sperm_mat_with_na <- rbind(sperm_mat_with_na[1:row_loc, ], new_row_vals, sperm_mat_with_na[row_loc+1:num_snps, ])
+    sperm_mat_with_na <- rbind(sperm_mat_with_na[1:row_loc, ], new_row_vals, sperm_mat_with_na[(row_loc+1):num_snps, ])
     #add in new haps line
-    recombined_hap_index <- rbind(recombined_hap_index[1:row_loc, ], new_row_haps, recombined_hap_index[row_loc+1:num_snps, ])
+    sperm_haps <- rbind(sperm_haps[1:row_loc, ], new_row_haps, sperm_haps[(row_loc+1):num_snps, ])
     #add in new indice and SNP
-    indices <- c(indices[1:row_loc], row_loc+1, indices[row_loc+1:num_snps]+1)
+    indices <- c(indices[1:row_loc], row_loc+1, indices[(row_loc+1):num_snps]+1)
     num_snps <- num_snps + 1 #increase num_snps by one
   }
 }
