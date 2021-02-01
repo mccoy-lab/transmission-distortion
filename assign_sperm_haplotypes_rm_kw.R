@@ -30,7 +30,8 @@ window_length <- as.integer(args[7]) #want 3000
 #   arrange(., pos) %>%
 #   as.data.frame()
 
-dt <- read_delim(input_file, delim = "\t") %>% as.data.frame()
+dt <- read_delim(input_file, delim = "\t", col_types = cols(.default = "d")) %>% 
+  as.data.frame()
 
 dt <- dt[((rowSums(dt[, 2:ncol(dt)] == 0, na.rm = TRUE) > 0) & (rowSums(dt[, 2:ncol(dt)] == 1, na.rm = TRUE) > 0)),]
 
