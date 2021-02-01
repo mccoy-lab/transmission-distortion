@@ -11,7 +11,18 @@ outDir <- args[4]
 seqError <- as.numeric(args[5]) #0.005
 hapProb <- 1 - seqError
 threads <- as.integer(args[6])
-window_length <- as.integer(args[7]) #2500 default, if error raised -- retry with 1000 and 5000 also
+window_length <- as.integer(args[7]) #want 3000
+
+# args <- commandArgs(trailingOnly = TRUE)
+# input_file <- "~/Downloads/nc26abcd_euploid_4.txt"
+# sampleName <- "nc26abcd"
+# chrom <- 4
+# outDir <- "~/Downloads/"
+# seqError <- 0.005
+# hapProb <- 1 - seqError
+# threads <- 2
+# window_length <- 3000 #2500 default, if error raised -- retry with 1000 and 5000 also
+
 
 # load the data
 # dt <- read_delim(input_file, delim = "\t") %>%
@@ -21,9 +32,11 @@ window_length <- as.integer(args[7]) #2500 default, if error raised -- retry wit
 
 dt <- read_delim(input_file, delim = "\t") %>% as.data.frame()
 
+dt <- dt[((rowSums(dt[, 2:ncol(dt)] == 0, na.rm = TRUE) > 0) & (rowSums(dt[, 2:ncol(dt)] == 1, na.rm = TRUE) > 0)),]
+
 # remove the first column (positions)
 positions <- dt[, 1]
-dt <- dt[,-1]
+dt <- dt[, -1]
 
 # this function gets the mode of a vector after removing the NAs
 getmode <- function(v) {
@@ -50,6 +63,13 @@ splitWithOverlap <- function(vec, seg.length, overlap) {
 
 # use overlaps of window length/2
 windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
+
+# merge the last two windows to avoid edge effect
+combined <- unique(c(windows[[length(windows) - 1]], windows[[length(windows)]]))
+combined <- combined[order(combined)]
+total_combined <- windows[-c((length(windows) - 1), length(windows))]
+total_combined[[length(total_combined) + 1]] <- combined
+windows <- total_combined
 
 # function to reconstruct parental haplotypes
 reconstruct_hap <- function(input_dt, input_positions, window_indices) {
@@ -83,32 +103,34 @@ before_time <- Sys.time()
 inferred_haplotypes <- pbmclapply(1:length(windows), 
                                   function(x) reconstruct_hap(dt, positions, windows[[x]]),
                                   mc.cores = getOption("mc.cores", threads))
+
 # stitch together the haplotypes
 initial_haplotype <- inferred_haplotypes[[1]]
-for (hap_window in 2:length(windows)) {
+for (hap_window in 1:length(windows)) {
   olap_haps <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index")
   olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
   #mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
-  mean_concordance2 <- mean(olap_haps$h1.x == olap_haps$h1.y, na.rm=TRUE)
+  mean_concordance2 <- mean(olap_haps$h1.x == olap_haps$h1.y, na.rm = TRUE)
+  message(paste("Window:", hap_window, mean_concordance2, sep = " "))
   if (mean_concordance2 < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
   } else if (mean_concordance2 < 0.9) {
-    stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance))
+    stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance2, " and Window: ", hap_window))
   }
   initial_haplotype <- tibble(index = olap_haps_complete$index,
                               pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
                                       olap_haps_complete[!is.na(olap_haps_complete$pos.x) &
-                                                           !is.na(olap_haps_complete$pos.y),]$pos.x,
+                                                         !is.na(olap_haps_complete$pos.y),]$pos.x,
                                       olap_haps_complete[is.na(olap_haps_complete$pos.x),]$pos.y),
                               h1 = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$h1.x,
                                      olap_haps_complete[!is.na(olap_haps_complete$pos.x) &
-                                                          !is.na(olap_haps_complete$pos.y),]$h1.x,
+                                                        !is.na(olap_haps_complete$pos.y),]$h1.x,
                                      olap_haps_complete[is.na(olap_haps_complete$pos.x),]$h1.y))
 }
 complete_haplotypes <- initial_haplotype %>%
   mutate(h2 = invertBits(h1))
 after_time <- Sys.time()
-time_to_impute <- after_time - before_time
+time_to_impute <- difftime(after_time, before_time, units="mins")
 message(paste0("Time used for inferring parental haplotypes: ", time_to_impute))
 
 filename_hap <- paste0(outDir, sampleName, "_", chrom, "_parental_hap.csv")
@@ -155,10 +177,10 @@ runHMM <- function(sperm_dt, column_index) {
 
 before_impute <- Sys.time()
 imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(dt),
-                                                 function(x) runHMM(dt, x),
-                                                 mc.cores = getOption("mc.cores", threads))))
+                                                     function(x) runHMM(dt, x),
+                                                     mc.cores = getOption("mc.cores", threads))))
 after_impute <- Sys.time()
-time_to_impute <- after_impute - before_impute
+time_to_impute <- difftime(after_impute, before_impute, units = "mins")
 message(paste0("Time used for imputing sperm haplotypes: ", time_to_impute))
 colnames(imputed_sperm) <- colnames(dt)
 
@@ -202,10 +224,10 @@ td_test <- function(sperm_matrix, row_index) {
 }
 
 df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
-                                            function(x) td_test(filled_sperm, x),
-                                            mc.cores=getOption("mc.cores", threads))) %>%
- as_tibble() %>%
- add_column(positions) #bind the positions vector to df_counts_pvals
+                                             function(x) td_test(filled_sperm, x),
+                                             mc.cores=getOption("mc.cores", threads))) %>%
+  as_tibble() %>%
+  add_column(positions) #bind the positions vector to df_counts_pvals
 colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
 write_csv(df_counts_pvals, filename_df)
@@ -239,9 +261,3 @@ recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
   right_join(., tibble(Ident = idents_for_csv), by = "Ident")
 filename_rs <- paste0(outDir, sampleName, "_", chrom, "_recombination_locs.csv")
 write_csv(recomb_spots_all, filename_rs)
-
-##plot the resolution of predicted recombination break point regions
-filename = paste0(outDir, sampleName, "_", chrom ,"_recombination_resolution.png")
-png(filename=filename)
-hist(recomb_spots_all$Genomic_end - recomb_spots_all$Genomic_start, xlab = "Differince in SNP position", breaks=100, main="Resolution of predicted recombination break point regions")
-dev.off()
