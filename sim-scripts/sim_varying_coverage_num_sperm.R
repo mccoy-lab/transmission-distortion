@@ -176,6 +176,18 @@ colnames(sperm_full_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
 #I think sperm_na_df is the df that can be passed to assign_sperm_haplotypes_rm_kw.R directly
 
 #run the whole pipeline
+# ensure that each row has at least one 0 and one 1
+keep_bool <- unname((rowSums(sperm_na_df[, 2:ncol(sperm_na_df)] == 0, na.rm = TRUE) > 0) & (rowSums(sperm_na_df[, 2:ncol(sperm_na_df)] == 1, na.rm = TRUE) > 0))
+sperm_na_df <- sperm_na_df[keep_bool,]
+sperm_full_df <- sperm_full_df[keep_bool,]
+parental_haps <- parental_haps[keep_bool,]
+num_snps <- sum(keep_bool)
+message(paste0("new number of snps", num_snps))
+`%notin%` <- Negate(`%in%`)
+for (i in 1:length(new_rows)){
+  message(new_rows[i] %notin% sperm_na_df[,1])
+}
+
 # remove the first column (positions)
 positions <- sperm_na_df[, 1]
 sperm_na_df <- sperm_na_df[,-1]
