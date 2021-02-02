@@ -499,7 +499,7 @@ hist(real_reads2, breaks=100, xlab="not NA by sperm", main="Distribution of simu
 
 ## Assessing the accuracy of parental haplotype reconstruction
 #complete_haplotypes compared to simulated hap1 and hap2
-num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - hap1) != 0, na.rm=TRUE), sum((complete_haplotypes$h1 - hap2) != 0, na.rm=TRUE))
+num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - parental_haps$Parental1) != 0, na.rm=TRUE), sum((complete_haplotypes$h1 - parental_haps$Parental2) != 0, na.rm=TRUE))
 accuracy_parental1 <- (num_snps - num_mismatch_parental1) / num_snps * 100
 message(paste0("Parental haplotype reconstruction accuracy: ", accuracy_parental1))
 if (sum(is.na(complete_haplotypes$h1))> 0){
@@ -508,8 +508,8 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
   message(past0("Parental haplotype reconstruction accuracy, corrected: ", accuracy_parental1_cor))
 }
 
-sum((complete_haplotypes$h1 - hap1) != 0) #10285
-sum((complete_haplotypes$h1 - hap2) != 0) #19715
+sum((complete_haplotypes$h1 - parental_haps$Parental1) != 0) #10285
+sum((complete_haplotypes$h1 - parental_haps$Parental2) != 0) #19715
 mismatches_parental <- which((complete_haplotypes$h1 -  hap1)  != 0)
 new_rows[1] %in% mismatches_parental #TRUE
 new_rows[2] %in% mismatches_parental #TRUE
