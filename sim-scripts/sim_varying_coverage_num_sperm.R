@@ -421,10 +421,10 @@ pred_onlyna_df <- recomb_spots_df[is.na(recomb_spots_df$start),] #this one is to
 pred_nona_df_sort <- bedr.sort.region(pred_nona_df) #these are the predicted recombination spots, with no NAs, lexicographically sorted
 
 ##plot the resolution of predicted recombination break point regions
-filename = paste0("simulated_recombination_resolution_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
-png(filename=filename)
+#filename = paste0("simulated_recombination_resolution_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
+#png(filename=filename)
 hist(recomb_spots_df$end - recomb_spots_df$start, xlab = "Differince in SNP index", breaks=100, main="Resolution of predicted recombination break point regions")
-dev.off()
+#dev.off()
 
 truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
                   method = "intersect",
@@ -486,16 +486,16 @@ message(paste0("Liberal recombination spot identification metrics\nPrecision: ",
                "\nFPR: ", metrics_lib$fpr))
 
 real_reads <- rowSums(!is.na(sperm_na_df))
-filename = paste0("simulated_notna_bysnp_numSperm_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
-png(filename=filename)
+#filename = paste0("simulated_notna_bysnp_numSperm_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
+#png(filename=filename)
 hist(real_reads, breaks=150, xlab="not NA by SNP", main="Distribution of simulated data not NA by SNP")
-dev.off()
+#dev.off()
 
 real_reads2 <- colSums(!is.na(sperm_na_df))
-filename = paste0("simulated_notna_bysperm_numSperm_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
-png(filename=filename)
+#filename = paste0("simulated_notna_bysperm_numSperm_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
+#png(filename=filename)
 hist(real_reads2, breaks=100, xlab="not NA by sperm", main="Distribution of simulated data not NA by sperm")
-dev.off()
+#dev.off()
 
 ## Assessing the accuracy of parental haplotype reconstruction
 #complete_haplotypes compared to simulated hap1 and hap2
@@ -507,6 +507,15 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
   accuracy_parental1_cor <- (((num_snps - num_na_h1) - num_mismatch_parental1)/(num_snps - num_na_hap1)) * 100
   message(past0("Parental haplotype reconstruction accuracy, corrected: ", accuracy_parental1_cor))
 }
+
+sum((complete_haplotypes$h1 - hap1) != 0) #10285
+sum((complete_haplotypes$h1 - hap2) != 0) #19715
+mismatches_parental <- which((complete_haplotypes$h1 -  hap1)  != 0)
+new_rows[1] %in% mismatches_parental #TRUE
+new_rows[2] %in% mismatches_parental #TRUE
+
+plot(c(mismatches_parental, new_rows), c(rep(1, length(mismatches_parental)), rep(1.05, length(new_rows))), cex=0.2, col=c(rep(rgb(red=0, green=0, blue=0, alpha=0.2), length(mismatches_parental)), rep(rgb(red=1, green=0, blue=0, alpha=0.8), length(new_rows))))
+
 
 ## Assessing the accuracy of gamete haplotype reconstruction
 re_recode_gametes <- function(dt, complete_haplotypes) {
@@ -530,7 +539,8 @@ message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawA
 correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
 message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val)))
 accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
-filename = paste0("simulated_sperm_hap_reconstruction_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
-png(filename=filename)
-ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="Sperm Haplotype Reconstruction")
-dev.off()
+#filename = paste0("simulated_sperm_hap_reconstruction_", num_sperm, "_numSNPs_", num_snps, "_coverage_", coverage, "_randomseed_", random_seed, ".png")
+#png(filename=filename)
+ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="Sperm Haplotype Reconstruction") + scale_y_continuous(name="accuracy", breaks=c(98.75, 99, 99.25, 99.5, 99.75, 100), labels=c(98.75, 99, 99.25, 99.5, 99.75, 100), limits=c(98.75, 100))
+
+#dev.off()
