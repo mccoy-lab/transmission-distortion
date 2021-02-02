@@ -22,7 +22,7 @@ threads <- 2L
 #window_length <- as.integer(args[6])
 seqError <- 0.005
 hapProb <- 1 - seqError
-window_length <- 2500
+window_length <- 3000
 
 #num_sperm <- as.integer(args[7])
 #num_snps <- as.integer(args[8])
@@ -127,17 +127,26 @@ if (add_seq_error){
 }
 
 if (add_de_novo_mut){
+  new_rows <- c()
   num_dnm <- rpois(1, lambda) + 1 #make sure this is greater than 0 by adding one
+  message(paste0("Number of de novo mutations: ", num_dnm))
   num_sperm_affected_per_dnm <- ceiling(rgamma(num_dnm, de_novo_alpha, scale=de_novo_beta))
   parentals_with_dnm <- sample(1:2, num_dnm, replace=TRUE)
   for (i in 1:num_dnm){ #for every parental dnm
     parental_with_dnm <- parentals_with_dnm[i]
+    row_loc <- sample(1:num_snps, 1) #pick random row which we'll add this new de novo mutation after
     sperm_can_be_affected <- which(sperm_haps[row_loc, ]==parental_with_dnm)
     num_sperm_affected <- min(num_sperm_affected_per_dnm[i], length(sperm_can_be_affected))
-    row_loc <- sample(1:num_snps, 1) #pick random row which we'll add this new de novo mutation after
+    message(paste0("Number of sperm affected for de novo mutation ", i, ": ", num_sperm_affected))
+    where_locs_greater <- which(new_rows >= (row_loc+1))
+    new_rows[where_locs_greater] <- new_rows[where_locs_greater] + 1
+    new_rows <- c(new_rows, (row_loc+1))
+    message(paste0("new row location: ", row_loc+1))
+    message(new_rows)
     parental_haps <- rbind(parental_haps[1:row_loc,], rep(0, 2), parental_haps[(row_loc+1):num_snps, ])
     parental_haps[(row_loc+1), parental_with_dnm] <- 1
     affected_sperm <- sort(sample(sperm_can_be_affected, num_sperm_affected))
+    message(paste0("affected sperm: ", affected_sperm))
     new_row_haps <- rep(abs((parental_with_dnm - 1)-1)+1, num_sperm)
     new_row_haps[sperm_can_be_affected] <- parental_with_dnm
     new_row_vals <- rep(0, num_sperm)
