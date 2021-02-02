@@ -510,7 +510,7 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
 
 sum((complete_haplotypes$h1 - parental_haps$Parental1) != 0) #10285
 sum((complete_haplotypes$h1 - parental_haps$Parental2) != 0) #19715
-mismatches_parental <- which((complete_haplotypes$h1 -  hap1)  != 0)
+mismatches_parental <- which((complete_haplotypes$h1 -  parental_haps$Parental1)  != 0)
 new_rows[1] %in% mismatches_parental #TRUE
 new_rows[2] %in% mismatches_parental #TRUE
 
