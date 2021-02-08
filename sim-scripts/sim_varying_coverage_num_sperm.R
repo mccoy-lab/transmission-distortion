@@ -181,7 +181,7 @@ for (i in 1:length(new_rows)){
   message(paste0("dnm ", i, " is filtered out: ", new_rows[i] %notin% sperm_na_df[,1]))
 }
 
-stopifnot((floor(num_snps/window_length) >= 4))
+#stopifnot((floor(num_snps/window_length) >= 4))
 #need to figure out how to adjust window_length based on number of snps after filtering
 
 # remove the first column (positions)
