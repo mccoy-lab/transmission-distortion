@@ -12,7 +12,7 @@ seqError <- as.numeric(args[5]) #0.005
 hapProb <- 1 - seqError
 threads <- as.integer(args[6])
 window_length <- as.integer(args[7]) #want 3000
-smooth <- as.logical(args[8])
+smooth <- as.logical(args[8]) #if true, will run as usual; if false, will superimpose original non-na genotype
 
 # args <- commandArgs(trailingOnly = TRUE)
 # input_file <- "~/Downloads/nc26abcd_euploid_4.txt"
