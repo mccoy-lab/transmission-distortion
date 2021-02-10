@@ -24,35 +24,42 @@ seqError <- 0.005
 hapProb <- 1 - seqError
 window_length <- 3000
 
-#num_sperm <- as.integer(args[7])
-#num_snps <- as.integer(args[8])
-#coverage <- as.numeric(args[9])
+#smooth <- as.logical(args[7])
+smooth <- TRUE
+
+#num_sperm <- as.integer(args[8])
+#num_snps <- as.integer(args[9])
+#coverage <- as.numeric(args[10])
+
 
 #num_sperm <- 15 #coverage decreases as this number increases
 num_sperm <- 3000
-num_snps <- 60000 
+num_snps <- 50000 
 coverage <- 0.001
 
-#missing_genotype_rate <- as.numeric(args[9])
-#coverage <- -log(missing_genotype_rate)
-#message(paste0("The coverage of this simulation is: ", coverage))
+####Alternative means to input coverage
+##missing_genotype_rate <- as.numeric(args[10])
+##coverage <- -log(missing_genotype_rate)
+####
 
-#random_seed <- as.integer(args[10])
+message(paste0("The coverage of this simulation is: ", coverage))
+
+#random_seed <- as.integer(args[11])
 random_seed <- 42
 set.seed(random_seed)
 
 
-#recomb_lambda <- as.integer(args[11])
+#recomb_lambda <- as.integer(args[12])
 recomb_lambda <- 1
 num_recomb_sites <- rpois(num_sperm, recomb_lambda)
 message(paste0("Total number of recombination spots across gametes: ", sum(num_recomb_sites)))
 
-#add_seq_error <- as.logical(args[12])
-#add_de_novo_mut <- as.logical(args[13])
-#seqError_add <- as.numeric(args[14])
-#de_novo_lambda <- as.integer(args[15])
-#de_novo_alpha <- as.numeric(args[16])
-#de_novo_beta <- as.numeric(args[17])
+#add_seq_error <- as.logical(args[13])
+#add_de_novo_mut <- as.logical(args[14])
+#seqError_add <- as.numeric(args[15])
+#de_novo_lambda <- as.integer(args[16])
+#de_novo_alpha <- as.numeric(args[17])
+#de_novo_beta <- as.numeric(args[18])
 add_seq_error <- TRUE
 add_de_novo_mut <- TRUE
 seqError_add <- 0.005
@@ -214,6 +221,8 @@ splitWithOverlap <- function(vec, seg.length, overlap) {
 # use overlaps of window length/2
 windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
 
+message(paste0("Number of windows with overlap of ", window_length / 2 , " and ", num_snps, " number of SNPs following filtering: ", length(windows)))
+
 # merge the last two windows to avoid edge effect
 combined <- unique(c(windows[[length(windows) - 1]], windows[[length(windows)]]))
 combined <- combined[order(combined)]
@@ -360,6 +369,15 @@ filled_sperm <- as_tibble(do.call(cbind,
                                   pblapply(1:ncol(imputed_sperm),
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(sperm_na_df)
+
+if (!smooth){
+  original_dt <- dt %>% 
+    mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
+    mutate_all(funs(str_replace(., "h2", "haplotype2")))
+  original_dt <- as.data.frame(original_dt)
+  filled_sperm <- as.data.frame(filled_sperm)
+  filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
+}
 
 td_test <- function(sperm_matrix, row_index) {
   test_row <- sperm_matrix[row_index,]
