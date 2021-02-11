@@ -3,27 +3,26 @@ library(pbapply)
 library(pbmcapply)
 library(HMM)
 
-args <- commandArgs(trailingOnly = TRUE)
-input_file <- args[1]
-sampleName <- args[2]
-chrom <- args[3]
-outDir <- args[4]
-seqError <- as.numeric(args[5]) #0.005
+#args <- commandArgs(trailingOnly = TRUE)
+#input_file <- args[1]
+#sampleName <- args[2]
+#chrom <- args[3]
+#outDir <- args[4]
+#seqError <- as.numeric(args[5]) #0.005
+#hapProb <- 1 - seqError
+#threads <- as.integer(args[6])
+#window_length <- as.integer(args[7]) #want 3000
+#smooth <- as.logical(args[8]) #if true, will run as usual; if false, will superimpose original non-na genotype
+
+input_file <- "~/mccoyLab_withOthers/transmission-distortion/test_data_to_save/nc26abcd_euploid_4.txt"
+sampleName <- "nc26abcd"
+chrom <- 4
+outDir <- "~/tmp/"
+seqError <- 0.005
 hapProb <- 1 - seqError
-threads <- as.integer(args[6])
-window_length <- as.integer(args[7]) #want 3000
-smooth <- as.logical(args[8]) #if true, will run as usual; if false, will superimpose original non-na genotype
-
-# args <- commandArgs(trailingOnly = TRUE)
-# input_file <- "~/Downloads/nc26abcd_euploid_4.txt"
-# sampleName <- "nc26abcd"
-# chrom <- 4
-# outDir <- "~/Downloads/"
-# seqError <- 0.005
-# hapProb <- 1 - seqError
-# threads <- 2
-# window_length <- 3000 #2500 default, if error raised -- retry with 1000 and 5000 also
-
+threads <- 2
+window_length <- 3000 #2500 default, if error raised -- retry with 1000 and 5000 also
+smooth <- FALSE
 
 # load the data
 # dt <- read_delim(input_file, delim = "\t") %>%
@@ -223,6 +222,7 @@ if (!smooth){
   original_dt <- as.data.frame(original_dt)
   filled_sperm <- as.data.frame(filled_sperm)
   filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
+  filled_sperm <- as_tibble(filled_sperm)
 }
 
 td_test <- function(sperm_matrix, row_index) {
