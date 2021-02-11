@@ -377,6 +377,7 @@ if (!smooth){
   original_dt <- as.data.frame(original_dt)
   filled_sperm <- as.data.frame(filled_sperm)
   filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
+  filled_sperm <- as_tibble(filled_sperm)
 }
 
 td_test <- function(sperm_matrix, row_index) {
