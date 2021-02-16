@@ -40,18 +40,32 @@ positions <- dt[, 1]
 dt <- dt[, -1]
 
 # this function gets the mode of a vector after removing the NAs
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv <- uniqv[!is.na(uniqv)]
-  uniqv[which.max(tabulate(match(v, uniqv)))]
+#getmode <- function(v) {
+#  uniqv <- unique(v)
+#  uniqv <- uniqv[!is.na(uniqv)]
+#  uniqv[which.max(tabulate(match(v, uniqv)))]
+#}
+
+getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
+  ux <- unique(na.omit(x))
+  tx <- tabulate(match(x, ux))
+  if(length(ux) != 1 & sum(max(tx) == tx) > 1) {
+    if (is.character(ux)) return(NA_character_) else return(NA_real_)
+  }
+  max_tx <- tx == max(tx)
+  return(ux[max_tx])
 }
 
 # this function replaces 0s with 1s and 1s with 0s in a data frame
+#invertBits <- function(df) {
+#  df[df == 0] <- -1
+#  df[df == 1] <- 0
+#  df[df == -1] <- 1
+#  return(df)
+#}
+
 invertBits <- function(df) {
-  df[df == 0] <- -1
-  df[df == 1] <- 0
-  df[df == -1] <- 1
-  return(df)
+  return(abs(df-1))
 }
 
 # overlapping window function from https://stackoverflow.com/questions/8872376/split-vector-with-overlapping-samples-in-r
