@@ -7,59 +7,33 @@ library(pbmcapply)
 library(HMM)
 library(ggplot2)
 
-#args <- commandArgs(trailingOnly = TRUE)
-#sampleName <- args[1]
-#chrom <- args[2]
-#stopifnot(grepl("chr", chrom, fixed=TRUE))
-#outDir <- args[3]
-#threads <- as.integer(args[4])
+
+start_script_time <- Sys.time()
 sampleName <- "simulation"
 chrom <- "chrT"
-outDir <- "tmp"
-threads <- 2L
+outDir <- "long_time_it/"
+threads <- 4
 
-#seqError <- as.numeric(args[5])
-#window_length <- as.integer(args[6])
 seqError <- 0.005
 hapProb <- 1 - seqError
 window_length <- 3000
 
-#smooth <- as.logical(args[7])
 smooth <- TRUE
 
-#num_sperm <- as.integer(args[8])
-#num_snps <- as.integer(args[9])
-#coverage <- as.numeric(args[10])
-
-
-#num_sperm <- 15 #coverage decreases as this number increases
-num_sperm <- 1000
-num_snps <- 30000 
-coverage <- 0.001
-
-####Alternative means to input coverage
-##missing_genotype_rate <- as.numeric(args[10])
-##coverage <- -log(missing_genotype_rate)
-####
+num_sperm <- 9600
+num_snps <- 50000 
+coverage <- 0.01
 
 message(paste0("The coverage of this simulation is: ", coverage))
 
-#random_seed <- as.integer(args[11])
 random_seed <- 42
 set.seed(random_seed)
 
 
-#recomb_lambda <- as.integer(args[12])
 recomb_lambda <- 1
 num_recomb_sites <- rpois(num_sperm, recomb_lambda)
 message(paste0("Total number of recombination spots across gametes: ", sum(num_recomb_sites)))
 
-#add_seq_error <- as.logical(args[13])
-#add_de_novo_mut <- as.logical(args[14])
-#seqError_add <- as.numeric(args[15])
-#de_novo_lambda <- as.integer(args[16])
-#de_novo_alpha <- as.numeric(args[17])
-#de_novo_beta <- as.numeric(args[18])
 add_seq_error <- TRUE
 add_de_novo_mut <- TRUE
 seqError_add <- 0.005
@@ -75,14 +49,19 @@ num_nas <- floor(num_genotypes * missing_genotype_rate)
 
 #start with 2 parental chromosomes of heterozygous sites
 #first parental chromosome
+before_time <- Sys.time()
 hap1 <- data.frame(V1 = sample(c(0, 1), size = num_snps, replace = TRUE))
 hap2 <- abs(1-hap1)
 parental_haps <- data.frame(cbind(hap1, hap2))
 colnames(parental_haps) <- c("Parental1", "Parental2")
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for generating parental haplotypes: ", time_to_impute))
+
 
 #indices <- 1:num_snps #we'll use these as both indices and a pseudo genomic position
 #this data structure only appears to be used here and when we record the locs of the dnm's here later. Get rid of?
-
+before_time <- Sys.time()
 generate_sperm <- function(parental_haplotypes, n_crossovers){
   init_hap_index <- sample(1:2, 1)
   init_hap <- parental_haplotypes[,init_hap_index]
@@ -106,7 +85,11 @@ sim_sperm <- lapply(1:num_sperm, function(x) generate_sperm(parental_haps, num_r
 sperm_mat <- sapply(sim_sperm, "[[", 2)
 sperm_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for generating gametes and recording needed info: ", time_to_impute))
 
+before_time <- Sys.time()
 add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps){
   to_return <- rep(NA, (num_snps*num_sperm))
   coords_to_keep_genotype <- sample(1:(num_snps*num_sperm), size=((num_snps*num_sperm)-num_nas), replace = FALSE)
@@ -116,7 +99,11 @@ add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps){
 }
 
 sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for sparsifying gametes: ", time_to_impute))
 
+before_time <- Sys.time()
 if (add_de_novo_mut){
   new_rows <- c()
   num_dnm <- rpois(1, de_novo_lambda) + 1 #make sure this is greater than 0 by adding one
@@ -157,7 +144,11 @@ if (add_de_novo_mut){
     #do we need to adjust recombination locations at all? Or are they fine being unchanged?
   }
 }
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for adding dnm's: ", time_to_impute))
 
+before_time <- Sys.time()
 td_test_truth <- function(sperm_matrix, row_index) {
   test_row <- sperm_matrix[row_index,]
   gt_vector <- unlist(test_row)[-1]
@@ -175,7 +166,11 @@ df_counts_pvals_truth <- do.call(rbind, pbmclapply(1:nrow(sperm_haps),
 colnames(df_counts_pvals_truth) <- c("pval", "h1_count", "h2_count", "genomic_position")
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_full.csv")
 write_csv(df_counts_pvals_truth, filename_df)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for finding and writing TD in simualted gametes: ", time_to_impute))
 
+before_time <- Sys.time()
 if (add_seq_error){
   num_genotypes <- num_snps * num_sperm #updating since this may have changed while adding de novo mutations
   num_bits_to_flip <- as.integer(seqError_add * (num_genotypes - num_nas))
@@ -185,13 +180,21 @@ if (add_seq_error){
   sperm_mat_with_na[where_locs] <- switched_bit_mat[where_locs] #take those locations from switched bit matrix and put them in place in the sperm_mat_with_na matrix
   sperm_mat_with_na <- matrix(sperm_mat_with_na, nrow=num_snps, ncol=num_sperm)
 }
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for adding in sequencing error: ", time_to_impute))
 
+before_time <- Sys.time()
 #make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
 colnames(sperm_na_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
 sperm_full_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat), sperm_mat)
 colnames(sperm_full_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for converting to data frames: ", time_to_impute))
 
+before_time <- Sys.time()
 #run the whole pipeline
 # ensure that each row has at least one 0 and one 1
 keep_bool <- unname((rowSums(sperm_na_df[, 2:ncol(sperm_na_df)] == 0, na.rm = TRUE) > 0) & (rowSums(sperm_na_df[, 2:ncol(sperm_na_df)] == 1, na.rm = TRUE) > 0))
@@ -207,6 +210,9 @@ for (i in 1:length(new_rows)){
 
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_filtered.csv")
 write_csv(df_counts_pvals_truth[keep_bool,], filename_df)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for filtering gamete data: ", time_to_impute))
 
 #stopifnot((floor(num_snps/window_length) >= 4))
 #need to figure out how to adjust window_length based on number of snps after filtering
@@ -216,34 +222,20 @@ positions <- sperm_na_df[, 1]
 sperm_na_df <- sperm_na_df[,-1]
 
 # this function gets the mode of a vector after removing the NAs
-#getmode <- function(v) {
-#  uniqv <- unique(v)
-#  uniqv <- uniqv[!is.na(uniqv)]
-#  uniqv[which.max(tabulate(match(v, uniqv)))]
-#}
-
-getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
-  ux <- unique(na.omit(x))
-  tx <- tabulate(match(x, ux))
-  if(length(ux) != 1 & sum(max(tx) == tx) > 1) {
-    if (is.character(ux)) return(NA_character_) else return(NA_real_)
-  }
-  max_tx <- tx == max(tx)
-  return(ux[max_tx])
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv <- uniqv[!is.na(uniqv)]
+  uniqv[which.max(tabulate(match(v, uniqv)))]
 }
 
 # this function replaces 0s with 1s and 1s with 0s in a data frame
-#invertBits <- function(df) {
-#  df[df == 0] <- -1
-#  df[df == 1] <- 0
-#  df[df == -1] <- 1
-#  return(df)
-#}
-
 invertBits <- function(df) {
-  return(abs(df-1))
+  df[df == 0] <- -1
+  df[df == 1] <- 0
+  df[df == -1] <- 1
+  return(df)
 }
-
+before_time <- Sys.time()
 # overlapping window function from https://stackoverflow.com/questions/8872376/split-vector-with-overlapping-samples-in-r
 splitWithOverlap <- function(vec, seg.length, overlap) {
   starts = seq(1, length(vec), by=seg.length-overlap)
@@ -263,7 +255,11 @@ combined <- combined[order(combined)]
 total_combined <- windows[-c((length(windows) - 1), length(windows))]
 total_combined[[length(total_combined) + 1]] <- combined
 windows <- total_combined
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for generating windows: ", time_to_impute))
 
+before_time <- Sys.time()
 # function to reconstruct parental haplotypes
 reconstruct_hap <- function(input_dt, input_positions, window_indices) {
   window_start <- min(window_indices)
@@ -292,7 +288,6 @@ reconstruct_hap <- function(input_dt, input_positions, window_indices) {
 }
 
 # infer the haplotypes within the overlapping windows
-before_time <- Sys.time()
 inferred_haplotypes <- pbmclapply(1:length(windows),
                                   function(x) reconstruct_hap(sperm_na_df, positions, windows[[x]]),
                                   mc.cores = getOption("mc.cores", threads))
@@ -326,6 +321,7 @@ after_time <- Sys.time()
 time_to_impute <- difftime(after_time, before_time, units="mins")
 message(paste0("Time used for inferring simulated parental haplotypes: ", time_to_impute))
 
+before_time <- Sys.time()
 # Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
 # in h1 at that position, replace the allele with "h1". Do the same for h2.
 for (i in 1:ncol(sperm_na_df)) {
@@ -365,15 +361,15 @@ runHMM <- function(sperm_dt, column_index) {
   return(original_obs)
 }
 
-before_impute <- Sys.time()
 imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(sperm_na_df),
                                                      function(x) runHMM(sperm_na_df, x),
                                                      mc.cores = getOption("mc.cores", threads))))
-after_impute <- Sys.time()
-time_to_impute <- difftime(after_impute, before_impute, units = "mins")
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units = "mins")
 message(paste0("Time used for imputing simulated gamete haplotypes: ", time_to_impute))
 colnames(imputed_sperm) <- colnames(sperm_na_df)
 
+before_time <- Sys.time()
 # Works on our sperm! Need to make the function work on every sperm in test3
 # and need to make fill up and down at the end
 fill_NAs <- function(merged_sperm, col_index) {
@@ -403,7 +399,11 @@ filled_sperm <- as_tibble(do.call(cbind,
                                   pblapply(1:ncol(imputed_sperm),
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(sperm_na_df)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for filling gametes: ", time_to_impute))
 
+before_time <- Sys.time()
 if (!smooth){
   original_dt <- dt %>% 
     mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
@@ -413,7 +413,11 @@ if (!smooth){
   filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
   filled_sperm <- as_tibble(filled_sperm)
 }
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for un-smoothing: ", time_to_impute))
 
+before_time <- Sys.time()
 td_test <- function(sperm_matrix, row_index) {
   test_row <- sperm_matrix[row_index,]
   gt_vector <- unlist(test_row)[-1]
@@ -431,7 +435,11 @@ df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
 colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim.csv")
 write_csv(df_counts_pvals, filename_df)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for finding and writing TD in simualted gametes: ", time_to_impute))
 
+before_time <- Sys.time()
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
   ident <- identities[x]
@@ -459,7 +467,11 @@ recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
                                               function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
                                               mc.cores=getOption("mc.cores", threads))) %>%
   right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for finding recombination events: ", time_to_impute))
 
+before_time <- Sys.time()
 #Prepare a dataframe for the true crossover locations that can be passed to bedr
 sperm_ident <- paste0(rep("sperm", num_sperm), 1:num_sperm, "_")
 names(crossover_indices) <- sperm_ident
@@ -480,13 +492,21 @@ row.names(recomb_spots_df) <- make.names(paste0(split_idents[,3], "_"), unique=T
 pred_nona_df <- drop_na(recomb_spots_df) #this one has all valid regions for bedr
 pred_onlyna_df <- recomb_spots_df[is.na(recomb_spots_df$start),] #this one is to check all the ones that don't have any recombination spots
 pred_nona_df_sort <- bedr.sort.region(pred_nona_df) #these are the predicted recombination spots, with no NAs, lexicographically sorted
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for converting to bedr compatible data frames: ", time_to_impute))
 
+before_time <- Sys.time()
 ##plot the resolution of predicted recombination break point regions
 filename = paste0(outDir, "simulated_recombination_resolution.pdf")
 pdf(file=filename)
 hist(recomb_spots_df$end - recomb_spots_df$start, xlab = "Differince in SNP index", breaks=100, main="Resolution of predicted recombination break point regions")
 dev.off()
+after_time <- Sys.time()
+plotting_time <- difftime(after_time, before_time, units="mins")
 
+
+before_time <- Sys.time()
 truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
                   method = "intersect",
                   params = "-loj -sorted") #those that aren't overlapping will be reported as NULL for b (. -1 -1). Those are fn
@@ -499,6 +519,11 @@ pred_v <- pred_truth_int[pred_truth_int$truth_chr == ".",] #nrow of this is fp
 
 truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
 pred_idents <- paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for running bedr: ", time_to_impute))
+
+before_time <- Sys.time()
 tp_cons <- length(unique(pred_idents))
 tp_lib <- nrow(truth_pred_int)
 
@@ -545,7 +570,11 @@ message(paste0("Liberal recombination spot identification metrics\nPrecision: ",
                "\nSpecificity: ", metrics_lib$specificity,
                "\nFDR: ", metrics_lib$fdr,
                "\nFPR: ", metrics_lib$fpr))
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for finding and reporting recombination metrics: ", time_to_impute))
 
+before_time <- Sys.time()
 real_reads <- rowSums(!is.na(sperm_na_df))
 filename = paste0(outDir, "simulated_notna_bysnp.pdf")
 pdf(file=filename)
@@ -557,7 +586,10 @@ filename = paste0(outDir, "simulated_notna_bysperm.pdf")
 pdf(file=filename)
 hist(real_reads2, breaks=100, xlab="not NA by sperm", main="Distribution of simulated data not NA by sperm")
 dev.off()
+after_time <- Sys.time()
+plotting_time <- plotting_time + difftime(after_time, before_time, units="mins")
 
+before_time <- Sys.time()
 ## Assessing the accuracy of parental haplotype reconstruction
 #complete_haplotypes compared to simulated hap1 and hap2
 num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - parental_haps$Parental1) != 0, na.rm=TRUE), sum((complete_haplotypes$h1 - parental_haps$Parental2) != 0, na.rm=TRUE))
@@ -568,13 +600,20 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
   accuracy_parental1_cor <- (((num_snps - num_na_h1) - num_mismatch_parental1)/(num_snps - num_na_hap1)) * 100
   message(past0("Parental haplotype reconstruction accuracy, corrected: ", accuracy_parental1_cor))
 }
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for assessing parental haplotype reconstruction accuracy: ", time_to_impute))
 
+before_time <- Sys.time()
 mismatches_parental <- which((complete_haplotypes$h1 -  parental_haps$Parental1)  != 0)
 filename = paste0(outDir, "simulated_parental_mismatch_loc.pdf")
 pdf(file=filename)
 plot(c(mismatches_parental, new_rows), c(rep(1, length(mismatches_parental)), rep(1.05, length(new_rows))), cex=0.2, col=c(rep(rgb(red=0, green=0, blue=0, alpha=0.2), length(mismatches_parental)), rep(rgb(red=1, green=0, blue=0, alpha=0.8), length(new_rows))))
 dev.off()
+after_time <- Sys.time()
+plotting_time <- plotting_time + difftime(after_time, before_time, units="mins")
 
+before_time <- Sys.time()
 ## Assessing the accuracy of gamete haplotype reconstruction
 re_recode_gametes <- function(dt, complete_haplotypes) {
   to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
@@ -595,10 +634,20 @@ num_nas_byCol <- colSums(is.na(filled_sperm_recode))
 rawAccuracy <- data.frame(val=((num_snps - num_mismatches_sperm_haplotype)/num_snps * 100), name="Raw") 
 message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val)))
 correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
-message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val)))
+message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val, na.rm=TRUE)))
 accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
+after_time <- Sys.time()
+time_to_impute <- difftime(after_time, before_time, units="mins")
+message(paste0("Time used for assessing gamete haplotype reconstruction accuracies: ", time_to_impute))
 
+before_time <- Sys.time()
 filename = paste0(outDir, "simulated_sperm_hap_reconstruction.pdf")
 pdf(file=filename)
 ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="Sperm Haplotype Reconstruction") + scale_y_continuous(name="accuracy", breaks=c(98.75, 99, 99.25, 99.5, 99.75, 100), labels=c(98.75, 99, 99.25, 99.5, 99.75, 100), limits=c(98.75, 100))
 dev.off()
+after_time <- Sys.time()
+plotting_time <- plotting_time + difftime(after_time, before_time, units="mins")
+message(paste0("Time used for plotting: ", plotting_time))
+end_script_time <- Sys.time()
+script_time <- difftime(end_script_time, start_script_time, units = "mins")
+message(paste0("Time used for the script: ", script_time))
