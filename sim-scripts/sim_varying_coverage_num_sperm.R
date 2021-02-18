@@ -13,9 +13,9 @@ library(ggplot2)
 #stopifnot(grepl("chr", chrom, fixed=TRUE))
 #outDir <- args[3]
 #threads <- as.integer(args[4])
-sampleName <- "simulation"
+sampleName <- "sim2_test"
 chrom <- "chrT"
-outDir <- "tmp"
+outDir <- "tmp/"
 threads <- 2L
 
 #seqError <- as.numeric(args[5])
@@ -33,8 +33,8 @@ smooth <- TRUE
 
 
 #num_sperm <- 15 #coverage decreases as this number increases
-num_sperm <- 1000
-num_snps <- 30000 
+num_sperm <- 3
+num_snps <- 50000 
 coverage <- 0.001
 
 ####Alternative means to input coverage
@@ -63,9 +63,9 @@ message(paste0("Total number of recombination spots across gametes: ", sum(num_r
 add_seq_error <- TRUE
 add_de_novo_mut <- TRUE
 seqError_add <- 0.005
-de_novo_lambda <- 15
-de_novo_alpha <- 12.5
-de_novo_beta <- 20
+de_novo_lambda <- 5
+de_novo_alpha <- 7.5
+de_novo_beta <- 10
 stopifnot(de_novo_beta > 0)
 
 #add to the base num_not_nan_per_row_base to find out the actual number of not NAs for each row. We'll now have a vector rather than a single integer
@@ -200,9 +200,11 @@ sperm_full_df <- sperm_full_df[keep_bool,]
 parental_haps <- parental_haps[keep_bool,]
 num_snps <- sum(keep_bool)
 message(paste0("new number of snps: ", num_snps))
-`%notin%` <- Negate(`%in%`)
-for (i in 1:length(new_rows)){
-  message(paste0("dnm ", i, " is filtered out: ", new_rows[i] %notin% sperm_na_df[,1]))
+if (add_de_novo_mut) {
+  `%notin%` <- Negate(`%in%`)
+  for (i in 1:length(new_rows)){
+    message(paste0("dnm ", i, " is filtered out: ", new_rows[i] %notin% sperm_na_df[,1]))
+  }
 }
 
 filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_filtered.csv")
@@ -246,6 +248,10 @@ invertBits <- function(df) {
 
 # overlapping window function from https://stackoverflow.com/questions/8872376/split-vector-with-overlapping-samples-in-r
 splitWithOverlap <- function(vec, seg.length, overlap) {
+  message(paste0("seg.length: ", seg.length))
+  if (overlap < seg.length) {
+    overlap <- seg.length - 1
+  }
   starts = seq(1, length(vec), by=seg.length-overlap)
   ends   = starts + seg.length - 1
   ends[ends > length(vec)] = length(vec)
@@ -569,12 +575,14 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
   message(past0("Parental haplotype reconstruction accuracy, corrected: ", accuracy_parental1_cor))
 }
 
-mismatches_parental <- which((complete_haplotypes$h1 -  parental_haps$Parental1)  != 0)
-filename = paste0(outDir, "simulated_parental_mismatch_loc.pdf")
-pdf(file=filename)
-plot(c(mismatches_parental, new_rows), c(rep(1, length(mismatches_parental)), rep(1.05, length(new_rows))), cex=0.2, col=c(rep(rgb(red=0, green=0, blue=0, alpha=0.2), length(mismatches_parental)), rep(rgb(red=1, green=0, blue=0, alpha=0.8), length(new_rows))))
-dev.off()
-
+if (add_de_novo_mut){
+  mismatches_parental <- which((complete_haplotypes$h1 -  parental_haps$Parental1)  != 0)
+  filename = paste0(outDir, "simulated_parental_mismatch_loc.pdf")
+  pdf(file=filename)
+  plot(c(mismatches_parental, new_rows), c(rep(1, length(mismatches_parental)), rep(1.05, length(new_rows))), cex=0.2, col=c(rep(rgb(red=0, green=0, blue=0, alpha=0.2), length(mismatches_parental)), rep(rgb(red=1, green=0, blue=0, alpha=0.8), length(new_rows))))
+  dev.off()
+}
+  
 ## Assessing the accuracy of gamete haplotype reconstruction
 re_recode_gametes <- function(dt, complete_haplotypes) {
   to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
