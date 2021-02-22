@@ -22,30 +22,35 @@ library(bedr)
 args <- commandArgs(trailingOnly = TRUE)
 sampleName <- "simTest"
 chrom <- "chrT"
-threads <- 2L #as.integer(args[1])
+threads <- as.integer(args[1])
 
-window_length <- 300 #as.integer(args[2])
+window_length <- as.integer(args[2])
 seqError <- 0.05
 hapProb <- 1 - seqError
 
-num_sperm <- 3 #as.integer(args[3])
-num_snps <- 100000 #as.integer(args[4])
-coverage <- 0.1 #as.numeric(args[5])
+num_sperm <- as.integer(args[3])
+num_snps <- as.integer(args[4])
+coverage <- as.numeric(args[5])
 
 num_genotypes <- num_sperm * num_snps
 missing_genotype_rate <- dpois(0, coverage)
 message(paste0("The missing genotype rate of this simulation is ", missing_genotype_rate))
 num_nas <- floor(num_genotypes * missing_genotype_rate)
 
-random_seed <- 966 #as.integer(args[1])
+random_seed <- as.integer(args[6])
 set.seed(random_seed)
 
-recomb_lambda <- 1 #as.integer(args[7])
+recomb_lambda <- 1
 num_recomb_sites <- rpois(num_sperm, recomb_lambda)
 message(paste0("Total number of recombination spots across gametes: ", sum(num_recomb_sites)))
 
 add_seq_error <- TRUE
 seqError_add <- 0.05
+add_de_novo_mut <- as.logical(args[7])
+de_novo_lambda <- 5
+de_novo_alpha <- 7.5
+de_novo_beta <- 10
+stopifnot(de_novo_beta > 0)
 
 ###Genenrate 2 parental chromosomes of heterozygous sites
 hap1 <- data.frame(V1 = sample(c(0, 1), size = num_snps, replace = TRUE)) #simulate first parental chromosome
@@ -102,6 +107,48 @@ add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps){
 
 sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
 
+###Include de novo mutations
+if (add_de_novo_mut){
+  new_rows <- c()
+  num_dnm <- rpois(1, de_novo_lambda) + 1 #make sure this is greater than 0 by adding one
+  message(paste0("Number of de novo mutations: ", num_dnm))
+  num_sperm_affected_per_dnm <- ceiling(rgamma(num_dnm, de_novo_alpha, scale=de_novo_beta))
+  parentals_with_dnm <- sample(1:2, num_dnm, replace=TRUE)
+  for (i in 1:num_dnm){ #for every parental dnm
+    parental_with_dnm <- parentals_with_dnm[i]
+    row_loc <- sample(1:num_snps, 1) #pick random row which we'll add this new de novo mutation after
+    sperm_can_be_affected <- which(sperm_haps[row_loc, ]==parental_with_dnm)
+    num_sperm_affected <- min(num_sperm_affected_per_dnm[i], length(sperm_can_be_affected))
+    message(paste0("Number of sperm affected for de novo mutation ", i, ": ", num_sperm_affected))
+    where_locs_greater <- which(new_rows >= (row_loc+1))
+    new_rows[where_locs_greater] <- new_rows[where_locs_greater] + 1
+    new_rows <- c(new_rows, (row_loc+1))
+    message(paste0("new row location: ", row_loc+1))
+    message(paste0("new rows vector: ", new_rows, collapse= " ; "))
+    parental_haps <- rbind(parental_haps[1:row_loc,], rep(0, 2), parental_haps[(row_loc+1):num_snps, ])
+    parental_haps[(row_loc+1), parental_with_dnm] <- 1
+    affected_sperm <- sort(sample(sperm_can_be_affected, num_sperm_affected))
+    #message(paste0("affected sperm: ", affected_sperm, collapse= " ; "))
+    new_row_haps <- rep(abs((parental_with_dnm - 1)-1)+1, num_sperm)
+    new_row_haps[sperm_can_be_affected] <- parental_with_dnm
+    new_row_vals <- rep(0, num_sperm)
+    new_row_vals[affected_sperm] <- 1
+    sperm_mat <- rbind(sperm_mat[1:row_loc, ], new_row_vals, sperm_mat[(row_loc+1):num_snps, ])
+    #add sparsity in
+    num_nas_to_add <- floor(num_sperm * missing_genotype_rate)
+    change_indices <- sample(1:num_sperm, num_nas_to_add)
+    new_row_vals[change_indices] <- NA
+    #add in new SNP line
+    sperm_mat_with_na <- rbind(sperm_mat_with_na[1:row_loc, ], new_row_vals, sperm_mat_with_na[(row_loc+1):num_snps, ])
+    #add in new haps line
+    sperm_haps <- rbind(sperm_haps[1:row_loc, ], new_row_haps, sperm_haps[(row_loc+1):num_snps, ])
+    #add in new indice and SNP
+    #indices <- c(indices[1:row_loc], row_loc+1, indices[(row_loc+1):num_snps]+1)
+    num_snps <- num_snps + 1 #increase num_snps by one
+    #do we need to adjust recombination locations at all? Or are they fine being unchanged?
+  }
+}
+
 ###Include sequencing error  
 if (add_seq_error){
   num_genotypes <- num_snps * num_sperm #updating since this may have changed while adding de novo mutations
@@ -127,6 +174,12 @@ sperm_full_df <- sperm_full_df[keep_bool,]
 parental_haps <- parental_haps[keep_bool,]
 num_snps <- sum(keep_bool)
 message(paste0("new number of snps: ", num_snps))
+if (add_de_novo_mut) {
+  `%notin%` <- Negate(`%in%`)
+  for (i in 1:length(new_rows)){
+    message(paste0("dnm ", i, " is filtered out: ", new_rows[i] %notin% sperm_na_df[,1]))
+  }
+}
 
 ##Remove the first column (positions)
 positions <- sperm_na_df[, 1]
@@ -165,8 +218,6 @@ splitWithOverlap <- function(vec, seg.length, overlap) {
 
 # use overlaps of window length/2
 windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
-message(length(windows))
-
 
 # merge the last two windows to avoid edge effect
 if (length(windows) > 1){
@@ -323,6 +374,16 @@ filled_sperm <- as_tibble(do.call(cbind,
                                   pblapply(1:ncol(imputed_sperm),
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(sperm_na_df)
+
+if (!smooth){
+  original_dt <- dt %>% 
+    mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
+    mutate_all(funs(str_replace(., "h2", "haplotype2")))
+  original_dt <- as.data.frame(original_dt)
+  filled_sperm <- as.data.frame(filled_sperm)
+  filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
+  filled_sperm <- as_tibble(filled_sperm)
+}
 
 ###Assessing the accuracy of gamete haplotype reconstruction
 re_recode_gametes <- function(dt, complete_haplotypes) {
