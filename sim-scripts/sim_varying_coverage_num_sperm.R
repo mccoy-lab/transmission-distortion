@@ -18,7 +18,7 @@ stopifnot(grepl("chr", chrom, fixed=TRUE))
 threads <- 2L
 
 #seqError <- as.numeric(args[5])
-seqError <- 0.005
+seqError <- 0.05
 #window_length <- as.integer(args[6]) #default has been 3000, how do I compute it keeping centimorgans in mind?
 window_length <- 3000
 #smooth <- as.logical(args[7]) #if FALSE, we re-impose non-NA original genotypes to the filled sperm after imputation
@@ -61,7 +61,7 @@ add_seq_error <- TRUE
 #add_de_novo_mut <- as.logical(args[14])
 add_de_novo_mut <- FALSE
 #seqError_add <- as.numeric(args[15]) #0.005
-seqError_add <- 0.005
+seqError_add <- 0.05
 #de_novo_lambda <- as.integer(args[16]) #5
 de_novo_lambda <- 5
 #de_novo_alpha <- as.numeric(args[17]) #7.5
@@ -255,15 +255,16 @@ splitWithOverlap <- function(vec, seg.length, overlap) {
 
 # use overlaps of window length/2
 windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
-message(length(windows))
 
 
 # merge the last two windows to avoid edge effect
+if (length(windows) > 1){
 combined <- unique(c(windows[[length(windows) - 1]], windows[[length(windows)]]))
 combined <- combined[order(combined)]
 total_combined <- windows[-c((length(windows) - 1), length(windows))]
 total_combined[[length(total_combined) + 1]] <- combined
 windows <- total_combined
+}
 
 message(paste0("Number of windows with overlap of ", window_length / 2 , " and ", num_snps, " number of SNPs following filtering: ", length(windows)))
 
@@ -441,10 +442,10 @@ re_recode_gametes <- function(dt, complete_haplotypes) {
 filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
 num_mismatches_sperm_haplotype <- colSums((filled_sperm_recode - sperm_full_df[,-1]) != 0, na.rm = TRUE)
 num_nas_byCol <- colSums(is.na(filled_sperm_recode))
-rawAccuracy <- data.frame(val=((num_snps - num_mismatches_sperm_haplotype)/num_snps * 100), name="Raw") 
-message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val)))
+rawAccuracy <- data.frame(val=((num_snps - (num_mismatches_sperm_haplotype + num_nas_byCol))/num_snps * 100), name="Raw") 
+message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val, na.rm=TRUE)))
 correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
-message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val)))
+message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val, na.rm=TRUE)))
 accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
 
 if (write_out_plot){
@@ -504,44 +505,79 @@ recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
 
 ###Prepare a truth dataframe for the true crossover locations that is bedr compatible
 ##Note bedr has to have different start and end values and cannot handle NAs
+canrun_bedr <- TRUE
+no_truths <- FALSE
+no_preds <- FALSE
+
 names(crossover_indices) <- paste0(rep("sperm", num_sperm), 1:num_sperm, "_")
 unlist_ci <- unlist(crossover_indices, use.names=TRUE) #just a list with a single row for each crossover, rowname corresponds to the sperm _1, _2, etc for sperm with more than one CO
 ci_df <- data.frame(chr=rep(as.character(chrom), length(unlist_ci)), start=(unlist_ci-1), end=(unlist_ci))
 row.names(ci_df) <- names(unlist_ci)
 truth_onlyna_df <- ci_df[is.na(ci_df$start),] #this one is to check all the gametes that don't have any true recombination spots
-truth_nona_df_sort <- bedr.sort.region(drop_na(ci_df)) #these are the true recombination spots, valid regions with no NAs, lexicographically sorted
+if (nrow(drop_na(ci_df)) >=1 ){
+  truth_nona_df_sort <- bedr.sort.region(drop_na(ci_df))
+  truth_nona_df_sort <- add_column(truth_nona_df_sort, "gametes" = row.names(truth_nona_df_sort),  "gametes_simp"=gsub("_.*", "", row.names(truth_nona_df_sort)))  #these are the true recombination spots, valid regions with no NAs, lexicographically sorted
+} else {
+  canrun_bedr <- FALSE
+  no_truths <- TRUE
+}
 
 ###Prepare a prediction  dataframe for the predicted crossover locations that is bedr compatible
 split_idents <- str_split(recomb_spots_all$Ident, "_", simplify=TRUE)
 recomb_spots_df <- data.frame(chr=as.character(split_idents[,2]), start=recomb_spots_all$Genomic_start, end=recomb_spots_all$Genomic_end)
 row.names(recomb_spots_df) <- make.names(paste0(split_idents[,3], "_"), unique=TRUE)
 pred_onlyna_df <- recomb_spots_df[is.na(recomb_spots_df$start),] #this one is to check all the gametes that don't have any predicted recombination spots
-pred_nona_df_sort <- bedr.sort.region(drop_na(recomb_spots_df)) #these are the predicted recombination spots, valid regions with no NAs, lexicographically sorted
+#might need to add a check to make sure these are greater than 0 rows
 
-truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
-                  method = "intersect",
-                  params = "-loj -sorted") #those that aren't overlapping will be reported as NULL for b (. -1 -1). Those are fn
-colnames(truth_pred_int) <- c("truth_chr", "truth_start", "truth_end", "pred_chr", "pred_start", "pred_end")
-truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
-fn_pt1 <- nrow(truth_pred_int[truth_pred_int$pred_chr == ".",]) #false negative because there is no overlapping predicted recombination for a true recombination spot, accomplished by finding the number of locations that are null in prediction column when truth intersected with prediction
-fn_pt2 <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df))) #predicted returns only NA when there is at least one truth rownames in the prediction but not in the truth
+if (nrow(drop_na(recomb_spots_df)) >= 1) {
+  pred_nona_df_sort <- bedr.sort.region(drop_na(recomb_spots_df))
+  pred_nona_df_sort <- add_column(pred_nona_df_sort, "gametes"= row.names(pred_nona_df_sort),  "gametes_simp"=gsub("_.*", "", row.names(pred_nona_df_sort)))#these are the predicted recombination spots, valid regions with no NAs, lexicographically sorted
+} else {
+  canrun_bedr <- FALSE
+  no_preds <- TRUE
+}
 
+if (canrun_bedr) {
+  truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
+                         method = "intersect",
+                         params = "-loj -sorted") #those that aren't overlapping will be reported as NULL for b (. -1 -1). Those are fn
+  colnames(truth_pred_int) <- c("truth_chr", "truth_start", "truth_end", "truth_gametes", "truth_gametes_simp", "pred_chr", "pred_start", "pred_end", "pred_gametes",  "pred_gametes_simp")
+  truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
+  rows_to_keep  <- which(truth_pred_int_nona$truth_gametes_simp == truth_pred_int_nona$pred_gametes_simp)
+  truth_pred_int_nona  <- truth_pred_int_nona[rows_to_keep, ]
+  
+  fn_pt1 <- nrow(truth_pred_int[truth_pred_int$pred_chr == ".",]) #false negative because there is no overlapping predicted recombination for a true recombination spot, accomplished by finding the number of locations that are null in prediction column when truth intersected with prediction
+  fn_pt2 <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df))) #predicted returns only NA when there is at least one truth rownames in the prediction but not in the truth
+  
+  tp_cons <- length(unique(paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by the length of the unique prediction identities from the non NA intersection
+  tp_lib <- nrow(truth_pred_int_nona) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction. accomplish this by counting number of truths that intersect any prediction from the non NA intersection
+  
+  pred_truth_int <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
+                         method = "intersect",
+                         params = "-loj -sorted")
+  colnames(pred_truth_int) <- c("pred_chr", "pred_start", "pred_end",  "pred_gametes",  "pred_gametes_simp", "truth_chr", "truth_start", "truth_end", "truth_gametes", "truth_gametes_simp")
+  fp <- nrow(pred_truth_int[pred_truth_int$truth_chr == ".",]) #number predicted as recombination spots, but don't intersect with truth at all
+  
+  fn_lib <- fn_pt1 + fn_pt2
+  fn_cons <- fn_pt1 + fn_pt2 + (tp_lib - nrow(truth_pred_int_nona)) #include overflow intersections, or when multiple truths intersect a single prediction 
+  
+  tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
+} else {
+  if (no_truths & !no_preds){ #no non-na truths, but there are non-na predictions, all are false positives
+    fp <- nrow(pred_nona_df_sort)
+    fn <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df)))
+    tp <- 0
+    tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
+  } 
+  else if (no_preds & !no_truths){ #no non-na predictions but there are non-na truths, all are false negatives
+    fn <- nrow(truth_nona_df_sort)
+    fp <- 0
+    tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
+    tp <- 0
+  } 
+  
+}
 
-tp_cons <- length(unique(paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by the length of the unique prediction identities from the non NA intersection
-tp_lib <- nrow(truth_pred_int_nona) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction. accomplish this by counting number of truths that intersect any prediction from the non NA intersection
-
-pred_truth_int <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
-                       method = "intersect",
-                       params = "-loj -sorted")
-colnames(pred_truth_int) <- c("pred_chr", "pred_start", "pred_end", "truth_chr", "truth_start", "truth_end")
-
-
-fp <- nrow(pred_truth_int[pred_truth_int$truth_chr == ".",]) #number predicted as recombination spots, but don't intersect with truth at all
-
-fn_lib <- fn_pt1 + fn_pt2
-fn_cons <- fn_pt1 + fn_pt2 + (tp_lib - nrow(truth_pred_int_nona)) #include overflow intersections, or when multiple truths intersect a single prediction 
-
-tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
 
 metrics <- function(tp, fp, tn, fn){
   precision <- tp/(tp+fp)
@@ -560,22 +596,43 @@ metrics <- function(tp, fp, tn, fn){
                       f1=f1)
   return (metric_list) }
 
-metrics_cons <- metrics(tp_cons, fp, tn, fn_cons)
-message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_cons$precision,
-                "\nRecall: ", metrics_cons$recall,
-                "\nAccuracy: ", metrics_cons$accuracy,
-                "\nF1: ", metrics_cons$f1,
-                "\nSpecificity: ", metrics_cons$specificity,
-                "\nFDR: ", metrics_cons$fdr,
-                "\nFPR: ", metrics_cons$fpr))
-metrics_lib <- metrics(tp_lib, fp, tn, fn_lib)
-message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_lib$precision,
-               "\nRecall: ", metrics_lib$recall,
-               "\nAccuracy: ", metrics_lib$accuracy,
-               "\nF1: ", metrics_lib$f1,
-               "\nSpecificity: ", metrics_lib$specificity,
-               "\nFDR: ", metrics_lib$fdr,
-               "\nFPR: ", metrics_lib$fpr))
+if (no_truths & no_preds){
+  message("no recombination metrics possible because there were no truths or predictions")
+} else if (no_truths | no_preds){
+  metrics_it <- metrics(tp, fp, tn, fn)
+  message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_it$precision,
+                 "\nRecall: ", metrics_it$recall,
+                 "\nAccuracy: ", metrics_it$accuracy,
+                 "\nF1: ", metrics_it$f1,
+                 "\nSpecificity: ", metrics_it$specificity,
+                 "\nFDR: ", metrics_it$fdr,
+                 "\nFPR: ", metrics_it$fpr))
+  message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_it$precision,
+                 "\nRecall: ", metrics_it$recall,
+                 "\nAccuracy: ", metrics_it$accuracy,
+                 "\nF1: ", metrics_it$f1,
+                 "\nSpecificity: ", metrics_it$specificity,
+                 "\nFDR: ", metrics_it$fdr,
+                 "\nFPR: ", metrics_it$fpr))
+  
+} else {
+  metrics_cons <- metrics(tp_cons, fp, tn, fn_cons)
+  message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_cons$precision,
+                 "\nRecall: ", metrics_cons$recall,
+                 "\nAccuracy: ", metrics_cons$accuracy,
+                 "\nF1: ", metrics_cons$f1,
+                 "\nSpecificity: ", metrics_cons$specificity,
+                 "\nFDR: ", metrics_cons$fdr,
+                 "\nFPR: ", metrics_cons$fpr))
+  metrics_lib <- metrics(tp_lib, fp, tn, fn_lib)
+  message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_lib$precision,
+                 "\nRecall: ", metrics_lib$recall,
+                 "\nAccuracy: ", metrics_lib$accuracy,
+                 "\nF1: ", metrics_lib$f1,
+                 "\nSpecificity: ", metrics_lib$specificity,
+                 "\nFDR: ", metrics_lib$fdr,
+                 "\nFPR: ", metrics_lib$fpr))
+}
 
 if (write_out_plot){
   ###Plot the resolution of predicted recombination break point regions
