@@ -37,7 +37,7 @@ missing_genotype_rate <- dpois(0, coverage)
 message(paste0("The missing genotype rate of this simulation is ", missing_genotype_rate))
 num_nas <- floor(num_genotypes * missing_genotype_rate)
 
-random_seed <- as.integer(args[1])
+random_seed <- 966 #as.integer(args[1])
 set.seed(random_seed)
 
 recomb_lambda <- 1 #as.integer(args[7])

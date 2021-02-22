@@ -25,6 +25,9 @@ parser.add_argument('--dna', action='store', dest='dna', type=float, default=7.5
 parser.add_argument('--dnb', action='store', dest='dnb', type=int, default=10)
 parser.add_argument('--baseDir', action='store', dest='baseDir', type=str, default='/home-3/kweave23@jhu.edu/work-rmccoy22/kweave23/sc_transmission_distortion/run_sim2_20210208/')
 parser.add_argument('--metricOI', action='store', dest='metricOI', type=str, default='gam_hap_rec_cor_acc', help='one of {gam_hap_rec_cor_acc, gam_hap_rec_raw_acc, parent_hap_rec_acc, lib_precision, cons_precision, lib_recall, cons_recall, lib_accuracy, cons_accuracy, lib_f1, cons_f1, lib_specificity, cons_specificity, lib_fdr, cons_fdr, lib_fpr, cons_fpr}')
+parser.add_argument('--dnmLoc', action='store', dest='dnmLoc', type=str, default='sim_loc_dnms.txt')
+parser.add_argument('--pvalsPred', action='store', dest='pvalsPred', type=str, default='sim2_chrT_pval_sim.csv')
+parser.add_argument('--pvalsTrue', action='store', dest='pvalsTrue', type=str, default='sim2_chrT_pval_sim_truth.csv')
 args = parser.parse_args()
 
 def file_based_on_metricOI(metricOI):
@@ -79,50 +82,95 @@ def add_to_data_storage(the_storage_arr, need_to_avg, fullDir, metricOI, i, j, k
                 the_storage_arr[i, j, k, l] = metric
             else:
                 the_storage_arr[i, j, k] = metric
-            return (the_storage_arr, False)
+            return (the_storage_arr, False, False)
         else:
-            return (the_storage_arr, False)
+            return (the_storage_arr, False, True)
     else:
 
-        return (the_storage_arr, True)
+        return (the_storage_arr, True, False)
+
+def get_from_pval_file(fullDir, outputFile_csv):
+    df = pd.read_csv("{}{}".format(fullDir, outputFile_csv))
+    h1_s, h2_s = df["h1_count"], df["h2_count"]
+    x_s, y_s = df["genomic_position"], -np.log10(df["pval"])
+    color_vals = np.maximum(h1_s, h2_s)/(h1_s+h2_s)*100
+    return x_s, y_s, color_vals
+
+def get_from_dnm_file(fullDir, outputFile_dnm):
+    dnm_loc_info = open("{}{}".format(fullDir, outputFile_dnm)).readlines()
+    dnm_locs = np.array([int(dnm_loc_spec.split(":")[-1]) for dnm_loc_spec in dnm_loc_info[0].split(';')])
+    to_keep_ind = np.array([True if dnm_bool_line.split(":")[-1].strip() == "FALSE" else False for dnm_bool_line in dnm_loc_info[1:]])
+    dnm_locs = dnm_locs[to_keep_ind]
+    return dnm_locs
 
 def find_missing_genotype_rate(coverages):
     mgr = poisson.pmf(0, coverages)*100
     return np.around(mgr, 2)
 
+mgrs = find_missing_genotype_rate(args.coverages)
+cov_ind = np.argsort(mgrs)
+mgrs = mgrs[cov_ind]
+coverages = np.array(args.coverages)[cov_ind]
+ngam_ind = np.argsort(args.ngams)[::-1]
+ngams = np.array(args.ngams)[ngam_ind]
+nsnp_ind = np.argsort(args.nsnps)
+nsnps = np.array(args.nsnps)[nsnp_ind]
+
 need_to_avg = False
 if len(args.randsd) > 1:
     need_to_avg = True
-    data_storage_arr = np.full((len(args.ngams), len(args.coverages), len(args.nsnps), len(args.randsd)), np.nan)
+    data_storage_arr = np.full((len(ngams), len(coverages), len(nsnps), len(args.randsd)), np.nan)
     for l, randsd in enumerate(args.randsd):
-        for i, ngam in enumerate(args.ngams):
-            for k, nsnp in enumerate(args.nsnps):
-                for j, coverage in enumerate(args.coverages):
+        for i, ngam in enumerate(ngams):
+            for k, nsnp in enumerate(nsnps):
+                for j, coverage in enumerate(coverages):
                     fullDir = "{}{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}/".format(args.baseDir, args.sampleName, args.chrom, randsd, args.seqError, args.ase, args.sea, args.windowLength, ngam, nsnp, coverage, args.rlam, args.adnm, args.dnl, args.dna, args.dnb)
-                    data_storage_arr, bool_val = add_to_data_storage(data_storage_arr, need_to_avg, fullDir, args.metricOI, i, j, k, l)
+                    data_storage_arr, bool_val, bool_val2 = add_to_data_storage(data_storage_arr, need_to_avg, fullDir, args.metricOI, i, j, k, l)
 else:
+    figp, axesp = plt.subplots(nrows=len(ngams), ncols=len(coverages), sharey=True)
+    cm = plt.cm.get_cmap("plasma")
+    random_snp = np.random.choice(np.arange(len(nsnps)), 1)
     num_no_ospath = 0
-    data_storage_arr = np.full((len(args.ngams), len(args.coverages), len(args.nsnps)), np.nan)
-    for i, ngam in enumerate(args.ngams):
-        for k, nsnp in enumerate(args.nsnps):
-            for j, coverage in enumerate(args.coverages):
+    num_fail = 0
+    data_storage_arr = np.full((len(ngams), len(coverages), len(nsnps)), np.nan)
+    for i, ngam in enumerate(ngams):
+        for k, nsnp in enumerate(nsnps):
+            for j, coverage in enumerate(coverages):
                 fullDir = "{}{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}/".format(args.baseDir, args.sampleName, args.chrom, args.randsd[0], args.seqError, args.ase, args.sea, args.windowLength, ngam, nsnp, coverage, args.rlam, args.adnm, args.dnl, args.dna, args.dnb)
-                data_storage_arr, bool_val = add_to_data_storage(data_storage_arr, need_to_avg, fullDir, args.metricOI, i, j, k, 0)
+                data_storage_arr, bool_val, bool_val2 = add_to_data_storage(data_storage_arr, need_to_avg, fullDir, args.metricOI, i, j, k, 0)
                 if bool_val:
                     num_no_ospath += 1
+                if bool_val2:
+                    num_fail += 1
+                if k == random_snp:
+                    x_s_p, y_s_p, colors_p = get_from_pval_file(fullDir, args.pvalsPred)
+                    x_s_t, y_s_t, colors_t = get_from_pval_file(fullDir, args.pvalsTrue)
+                    posp = axesp[i,j].scatter(x_s_p, y_s_p, c=colors_p, cmap=cm)
+                    clbp = plt.colorbar(posp, ax=axesp[i,j])
+                    clbp.set_label('td ratio', labelpad=-40, y=1.05, rotation=0)
+                    if args.adnm == "TRUE":
+                        dnm_locs = get_from_dnm_file(fullDir, args.dnmLoc)
+                        for i, ind in enumerate(dnm_locs):
+                            axesp[i,j].axvline(np.where(x_s_p == ind)[0], linestyle='--', color='black')
+                    axeps[i,j].set_xlabel('SNP index')
+                    axesp[i,j].set_ylabel('-log10(pval)')
+    plt.tight_layout()
+    fig.savefig('panel_manhattan_plot.png')
+    plt.close(fig)
+
 
 if need_to_avg:
     data_storage_arr = np.mean(data_storage_arr, axis=3)
 
-print(num_no_ospath, flush=True)
+print(num_no_ospath, num_fail, flush=True)
 f=open('sim2_storage_arr.npz', 'wb')
 np.savez(f, sim2_results=data_storage_arr)
 f.close()
 
-fig, axes = plt.subplots(nrows=1, ncols=len(args.nsnps), figsize=(20,10), sharey=True)
-for k in np.arange(len(args.nsnps)):
-    g = sns.heatmap(data_storage_arr[:,:,k], ax=axes[k], cmap="plasma", linecolor='black', linewidths=0.1, yticklabels=args.ngams, xticklabels=find_missing_genotype_rate(args.coverages))
-    axes[k].set_title("{} SNPs".format(args.nsnps[k]))
+fig, axes = plt.subplots(nrows=1, ncols=len(nsnps), figsize=(20,10), sharey=True)
+for k in np.arange(len(nsnps)):
+    g = sns.heatmap(data_storage_arr[:,:,k], ax=axes[k], cmap="plasma", linecolor='black', linewidths=0.1, yticklabels=ngams, xticklabels=mgrs)
+    axes[k].set_title("{} SNPs".format(nsnps[k]))
     if k == 0:
         axes[k].set_ylabel("Number of Gametes")
         g.set_yticklabels(g.get_yticklabels(), rotation = 90)

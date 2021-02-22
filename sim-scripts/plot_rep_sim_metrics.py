@@ -2,6 +2,7 @@
 
 import numpy as np
 import argparse as ap
+import os.path
 
 parser = ap.ArgumentParser(description="plot the simulation results")
 parser.add_argument('--ngam', action='store', dest='ngam', type=int, default=1000)
@@ -61,15 +62,16 @@ def file_line_index_based_on_metricOI(metricOI):
 
 def find_summary_stat(metricOI, values):
     if metricOI in ["gam_hap_rec_cor_acc", "gam_hap_rec_raw_acc", "parent_hap_rec_acc", "nrecomb", "nsnps", "lib_precision", "cons_precision", "lib_recall", "cons_recall", "lib_accuracy", "cons_accuracy", "lib_specificity", "cons_specificity", "lib_fdr", "cons_fdr", "lib_fpr", "cons_fpr"]:
-        return "mean", np.mean(values)
+        return "mean", np.nanmean(values)
     elif metricOI in ["lib_f1", "cons_f1"]:
-        return "median", np.median(values)
+        return "median", np.nanmedian(values)
 
 for metricOI in args.metricOIs:
     values_to_store = []
     for randsd in args.randsds:
         file_base = 'wl{}_gam{}_snp{}_cov{}/'.format(args.windowLength, args.ngam, args.nsnp, args.coverage)
         file = args.dirBase + file_base + file_based_on_metricOI(metricOI).format(randsd)
-        values_to_store.append(float(open(file).readlines()[file_line_index_based_on_metricOI(metricOI)].split(':')[-1]))
+        if os.path.exists(file) and len(open(file).readlines()) > 0:
+            values_to_store.append(float(open(file).readlines()[file_line_index_based_on_metricOI(metricOI)].split(':')[-1]))
     stat_type, metric_val = find_summary_stat(metricOI, values_to_store)
     print(metricOI, stat_type, metric_val)

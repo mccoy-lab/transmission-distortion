@@ -9,82 +9,92 @@ library(ggplot2)
 
 #args <- commandArgs(trailingOnly = TRUE)
 #sampleName <- args[1]
+sampleName <- "sim_test"
 #chrom <- args[2]
-#stopifnot(grepl("chr", chrom, fixed=TRUE))
+chrom <- "chrT"
+stopifnot(grepl("chr", chrom, fixed=TRUE))
 #outDir <- args[3]
 #threads <- as.integer(args[4])
-sampleName <- "sim2_test"
-chrom <- "chrT"
-outDir <- "tmp/"
 threads <- 2L
 
 #seqError <- as.numeric(args[5])
-#window_length <- as.integer(args[6])
 seqError <- 0.005
-hapProb <- 1 - seqError
+#window_length <- as.integer(args[6]) #default has been 3000, how do I compute it keeping centimorgans in mind?
 window_length <- 3000
-
-#smooth <- as.logical(args[7])
+#smooth <- as.logical(args[7]) #if FALSE, we re-impose non-NA original genotypes to the filled sperm after imputation
 smooth <- TRUE
+hapProb <- 1 - seqError
 
 #num_sperm <- as.integer(args[8])
+num_sperm <- 1000
 #num_snps <- as.integer(args[9])
+num_snps <- 30000
 #coverage <- as.numeric(args[10])
+coverage <- 0.01
 
-
-#num_sperm <- 15 #coverage decreases as this number increases
-num_sperm <- 3
-num_snps <- 50000 
-coverage <- 0.001
 
 ####Alternative means to input coverage
 ##missing_genotype_rate <- as.numeric(args[10])
+##if (missing_genotype_rate > 1){ #if entered as a percentage
+  ##missing_genotype_rate <- missing_genotype_rate / 100
+##}
 ##coverage <- -log(missing_genotype_rate)
 ####
 
 message(paste0("The coverage of this simulation is: ", coverage))
+num_genotypes <- num_sperm * num_snps
+missing_genotype_rate <- dpois(0, coverage)
+message(paste0("The missing genotype rate of this simulation is ", missing_genotype_rate))
+num_nas <- floor(num_genotypes * missing_genotype_rate)
 
 #random_seed <- as.integer(args[11])
 random_seed <- 42
 set.seed(random_seed)
 
-
-#recomb_lambda <- as.integer(args[12])
+#recomb_lambda <- as.integer(args[12]) #we tend to use default of 1
 recomb_lambda <- 1
 num_recomb_sites <- rpois(num_sperm, recomb_lambda)
 message(paste0("Total number of recombination spots across gametes: ", sum(num_recomb_sites)))
 
 #add_seq_error <- as.logical(args[13])
-#add_de_novo_mut <- as.logical(args[14])
-#seqError_add <- as.numeric(args[15])
-#de_novo_lambda <- as.integer(args[16])
-#de_novo_alpha <- as.numeric(args[17])
-#de_novo_beta <- as.numeric(args[18])
 add_seq_error <- TRUE
-add_de_novo_mut <- TRUE
+#add_de_novo_mut <- as.logical(args[14])
+add_de_novo_mut <- FALSE
+#seqError_add <- as.numeric(args[15]) #0.005
 seqError_add <- 0.005
+#de_novo_lambda <- as.integer(args[16]) #5
 de_novo_lambda <- 5
+#de_novo_alpha <- as.numeric(args[17]) #7.5
 de_novo_alpha <- 7.5
+#de_novo_beta <- as.numeric(args[18]) #10
 de_novo_beta <- 10
 stopifnot(de_novo_beta > 0)
 
-#add to the base num_not_nan_per_row_base to find out the actual number of not NAs for each row. We'll now have a vector rather than a single integer
-num_genotypes <- num_sperm * num_snps
-missing_genotype_rate <- dpois(0, coverage)
-num_nas <- floor(num_genotypes * missing_genotype_rate)
+#write_out_plot <- as.logical(args[19])
+write_out_plot <- FALSE
 
-#start with 2 parental chromosomes of heterozygous sites
-#first parental chromosome
-hap1 <- data.frame(V1 = sample(c(0, 1), size = num_snps, replace = TRUE))
-hap2 <- abs(1-hap1)
+###Genenrate 2 parental chromosomes of heterozygous sites
+hap1 <- data.frame(V1 = sample(c(0, 1), size = num_snps, replace = TRUE)) #simulate first parental chromosome
+hap2 <- abs(1-hap1) #switch bits to construct second parental
 parental_haps <- data.frame(cbind(hap1, hap2))
 colnames(parental_haps) <- c("Parental1", "Parental2")
 
-#indices <- 1:num_snps #we'll use these as both indices and a pseudo genomic position
-#this data structure only appears to be used here and when we record the locs of the dnm's here later. Get rid of?
-
+###Generate gametes from these 2 parental chromosomes
 generate_sperm <- function(parental_haplotypes, n_crossovers){
-  init_hap_index <- sample(1:2, 1)
+  #this function generates a single gamete given parental haplotypes and the number of crossovers that should occurs for a given gamete
+  # -- pick which parental haplotype corresponds to the beginning of the gamete's chromosome
+  # -- assign the 0 & 1 genotypes of this first parental haplotype to the whole gamete
+  # -- assign the 1 or 2 of reprenesting which haplotype to the whole gamete
+  #     -- re-code this to 0 or 1 (just subtract 1)
+  #     -- at the end re-recode this back to 1's and 2's (just add 1)
+  # -- for each crossover index, i, between index i-1 and index i, switch the bits for the rest of the chromosome genotypes to the opposite parental haplotype  or genotype compared to the one just previous (abs(value-1))
+  #input  -- parental_haplotypes: a dataframe with the two parental haplotypes
+  #          n_crossovers: integer, the number of crossovers for this given gamete
+  #output -- a list with 3 elements
+  #             --crossover_indices, a vector of integers, such that each integer, wlog i, represents an index location of a crossover exchange point, such that the crossover occurred somewhere between SNP index locations i-1 and i
+  #             --recombined_hap, a vector of 0's and 1's, representing the gamete's fully known generated genotype
+  #             --recombined_hap_index, a vector of 1's and 2's, representing which parental haplotype that location's genotype originated from
+  init_hap_index <- sample(1:2, 1) #which parental haplotype corresponds to the beginning of the gamete's chromosome
   init_hap <- parental_haplotypes[,init_hap_index]
   if (n_crossovers == 0) {
     return(list(NA, init_hap, rep(init_hap_index, length(init_hap))))
@@ -107,6 +117,7 @@ sperm_mat <- sapply(sim_sperm, "[[", 2)
 sperm_haps <- sapply(sim_sperm, "[[", 3)
 crossover_indices <- sapply(sim_sperm, "[[", 1)
 
+###Sparsify the knowledge of the gametes
 add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps){
   to_return <- rep(NA, (num_snps*num_sperm))
   coords_to_keep_genotype <- sample(1:(num_snps*num_sperm), size=((num_snps*num_sperm)-num_nas), replace = FALSE)
@@ -117,6 +128,7 @@ add_to_na_flatten <- function(to_add_from, num_nas, num_sperm, num_snps){
 
 sperm_mat_with_na <- add_to_na_flatten(sperm_mat, num_nas, num_sperm, num_snps)
 
+###Include de novo mutations
 if (add_de_novo_mut){
   new_rows <- c()
   num_dnm <- rpois(1, de_novo_lambda) + 1 #make sure this is greater than 0 by adding one
@@ -137,7 +149,7 @@ if (add_de_novo_mut){
     parental_haps <- rbind(parental_haps[1:row_loc,], rep(0, 2), parental_haps[(row_loc+1):num_snps, ])
     parental_haps[(row_loc+1), parental_with_dnm] <- 1
     affected_sperm <- sort(sample(sperm_can_be_affected, num_sperm_affected))
-    message(paste0("affected sperm: ", affected_sperm, collapse= " ; "))
+    #message(paste0("affected sperm: ", affected_sperm, collapse= " ; "))
     new_row_haps <- rep(abs((parental_with_dnm - 1)-1)+1, num_sperm)
     new_row_haps[sperm_can_be_affected] <- parental_with_dnm
     new_row_vals <- rep(0, num_sperm)
@@ -173,9 +185,12 @@ df_counts_pvals_truth <- do.call(rbind, pbmclapply(1:nrow(sperm_haps),
   as_tibble() %>%
   add_column(1:nrow(sperm_haps)) #bind the positions vector to df_counts_pvals
 colnames(df_counts_pvals_truth) <- c("pval", "h1_count", "h2_count", "genomic_position")
-filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_full.csv")
-write_csv(df_counts_pvals_truth, filename_df)
+if (write_out_plot){
+  filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_full.csv")
+  write_csv(df_counts_pvals_truth, filename_df)
+}
 
+###Include sequencing error  
 if (add_seq_error){
   num_genotypes <- num_snps * num_sperm #updating since this may have changed while adding de novo mutations
   num_bits_to_flip <- as.integer(seqError_add * (num_genotypes - num_nas))
@@ -186,14 +201,14 @@ if (add_seq_error){
   sperm_mat_with_na <- matrix(sperm_mat_with_na, nrow=num_snps, ncol=num_sperm)
 }
 
-#make it into a dataframe that I can give to the rest of the pipeline, so I need to have genomic positions first, column names for each sperm
+##Transform into dataframes that can be passed to the rest of the pipeline -- genomic positions first, column names for each sperm
 sperm_na_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat_with_na), sperm_mat_with_na)
 colnames(sperm_na_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
 sperm_full_df <- data.frame(pseudo_pos = 1:nrow(sperm_mat), sperm_mat)
 colnames(sperm_full_df) <- c("positions", paste0("sperm", 1:num_sperm, "_"))
 
-#run the whole pipeline
-# ensure that each row has at least one 0 and one 1
+###Run the whole pipeline
+##Ensure that each row has at least one 0 and one 1
 keep_bool <- unname((rowSums(sperm_na_df[, 2:ncol(sperm_na_df)] == 0, na.rm = TRUE) > 0) & (rowSums(sperm_na_df[, 2:ncol(sperm_na_df)] == 1, na.rm = TRUE) > 0))
 sperm_na_df <- sperm_na_df[keep_bool,]
 sperm_full_df <- sperm_full_df[keep_bool,]
@@ -207,22 +222,14 @@ if (add_de_novo_mut) {
   }
 }
 
-filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_filtered.csv")
-write_csv(df_counts_pvals_truth[keep_bool,], filename_df)
-
-#stopifnot((floor(num_snps/window_length) >= 4))
-#need to figure out how to adjust window_length based on number of snps after filtering
-
-# remove the first column (positions)
+if (write_out_plot){
+  filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_filtered.csv")
+  write_csv(df_counts_pvals_truth[keep_bool,], filename_df)
+}
+  
+##Remove the first column (positions)
 positions <- sperm_na_df[, 1]
 sperm_na_df <- sperm_na_df[,-1]
-
-# this function gets the mode of a vector after removing the NAs
-#getmode <- function(v) {
-#  uniqv <- unique(v)
-#  uniqv <- uniqv[!is.na(uniqv)]
-#  uniqv[which.max(tabulate(match(v, uniqv)))]
-#}
 
 getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
   ux <- unique(na.omit(x))
@@ -234,24 +241,12 @@ getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no
   return(ux[max_tx])
 }
 
-# this function replaces 0s with 1s and 1s with 0s in a data frame
-#invertBits <- function(df) {
-#  df[df == 0] <- -1
-#  df[df == 1] <- 0
-#  df[df == -1] <- 1
-#  return(df)
-#}
-
 invertBits <- function(df) {
   return(abs(df-1))
 }
 
 # overlapping window function from https://stackoverflow.com/questions/8872376/split-vector-with-overlapping-samples-in-r
 splitWithOverlap <- function(vec, seg.length, overlap) {
-  message(paste0("seg.length: ", seg.length))
-  if (overlap < seg.length) {
-    overlap <- seg.length - 1
-  }
   starts = seq(1, length(vec), by=seg.length-overlap)
   ends   = starts + seg.length - 1
   ends[ends > length(vec)] = length(vec)
@@ -260,8 +255,8 @@ splitWithOverlap <- function(vec, seg.length, overlap) {
 
 # use overlaps of window length/2
 windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
+message(length(windows))
 
-message(paste0("Number of windows with overlap of ", window_length / 2 , " and ", num_snps, " number of SNPs following filtering: ", length(windows)))
 
 # merge the last two windows to avoid edge effect
 combined <- unique(c(windows[[length(windows) - 1]], windows[[length(windows)]]))
@@ -269,6 +264,9 @@ combined <- combined[order(combined)]
 total_combined <- windows[-c((length(windows) - 1), length(windows))]
 total_combined[[length(total_combined) + 1]] <- combined
 windows <- total_combined
+
+message(paste0("Number of windows with overlap of ", window_length / 2 , " and ", num_snps, " number of SNPs following filtering: ", length(windows)))
+
 
 # function to reconstruct parental haplotypes
 reconstruct_hap <- function(input_dt, input_positions, window_indices) {
@@ -298,7 +296,6 @@ reconstruct_hap <- function(input_dt, input_positions, window_indices) {
 }
 
 # infer the haplotypes within the overlapping windows
-before_time <- Sys.time()
 inferred_haplotypes <- pbmclapply(1:length(windows),
                                   function(x) reconstruct_hap(sperm_na_df, positions, windows[[x]]),
                                   mc.cores = getOption("mc.cores", threads))
@@ -310,6 +307,7 @@ for (hap_window in 1:length(windows)) {
   olap_haps_complete <- merge(initial_haplotype, inferred_haplotypes[[hap_window]], by = "index", all = TRUE)
   #mean_concordance <- mean(olap_haps$h1.x == olap_haps$h1.y)
   mean_concordance2 <- mean(olap_haps$h1.x == olap_haps$h1.y, na.rm=TRUE)
+  message(paste0("Window ", hap_window, "Mean Concordance: ", mean_concordance2))
   if (mean_concordance2 < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
   } else if (mean_concordance2 < 0.9) {
@@ -328,9 +326,18 @@ for (hap_window in 1:length(windows)) {
 
 complete_haplotypes <- initial_haplotype %>%
   mutate(h2 = invertBits(h1))
-after_time <- Sys.time()
-time_to_impute <- difftime(after_time, before_time, units="mins")
-message(paste0("Time used for inferring simulated parental haplotypes: ", time_to_impute))
+
+###Assessing the accuracy of parental haplotype reconstruction
+#complete_haplotypes compared to simulated hap1 and hap2
+num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - parental_haps$Parental1) != 0, na.rm=TRUE), sum((complete_haplotypes$h1 - parental_haps$Parental2) != 0, na.rm=TRUE))
+num_nas_parental1 <- min(sum(is.na(complete_haplotypes$h1 - parental_haps$Parental1)), sum(is.na(complete_haplotypes$h1 - parental_haps$Parental2)))
+accuracy_parental1 <- (num_snps - (num_mismatch_parental1 + num_nas_parental1))/ num_snps * 100
+message(paste0("Parental haplotype reconstruction accuracy: ", accuracy_parental1))
+if (sum(is.na(complete_haplotypes$h1))> 0){
+  num_na_h1 <- sum(is.na(complete_haplotypes$h1))
+  accuracy_parental1_cor <- (((num_snps - num_na_h1) - num_mismatch_parental1)/(num_snps - num_na_h1)) * 100
+  message(paste0("Parental haplotype reconstruction accuracy, corrected: ", accuracy_parental1_cor))
+}
 
 # Going through each sperm, if an allele (0 or 1) in a sperm matches the allele (0 or 1)
 # in h1 at that position, replace the allele with "h1". Do the same for h2.
@@ -338,6 +345,7 @@ for (i in 1:ncol(sperm_na_df)) {
   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h1] <- "h1"
   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h2] <- "h2"
 }
+####Might need to handle the 0's and 1's still in sperm_na_df that don't match complete_haplotypes$h1 or complete_haplotypes$h2 because of NAs in complete_haplotypes
 
 # Scan sperm by sperm to interpret state given emission
 # First, we initialize our HMM
@@ -371,13 +379,9 @@ runHMM <- function(sperm_dt, column_index) {
   return(original_obs)
 }
 
-before_impute <- Sys.time()
 imputed_sperm <- as_tibble(do.call(cbind, pbmclapply(1:ncol(sperm_na_df),
                                                      function(x) runHMM(sperm_na_df, x),
                                                      mc.cores = getOption("mc.cores", threads))))
-after_impute <- Sys.time()
-time_to_impute <- difftime(after_impute, before_impute, units = "mins")
-message(paste0("Time used for imputing simulated gamete haplotypes: ", time_to_impute))
 colnames(imputed_sperm) <- colnames(sperm_na_df)
 
 # Works on our sperm! Need to make the function work on every sperm in test3
@@ -420,6 +424,36 @@ if (!smooth){
   filled_sperm <- as_tibble(filled_sperm)
 }
 
+###Assessing the accuracy of gamete haplotype reconstruction
+re_recode_gametes <- function(dt, complete_haplotypes) {
+  to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
+  for (i in 1:ncol(dt)) {
+    locs_h1 <- dt[,i] == "haplotype1"
+    locs_h1[which(is.na(locs_h1))] <- FALSE
+    locs_h2 <- dt[,i] == "haplotype2"
+    locs_h2[which(is.na(locs_h2))] <- FALSE
+    to_return[locs_h1, i] <- complete_haplotypes$h1[locs_h1]
+    to_return[locs_h2, i] <- complete_haplotypes$h2[locs_h2]
+  }
+  return(to_return)
+}
+
+filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
+num_mismatches_sperm_haplotype <- colSums((filled_sperm_recode - sperm_full_df[,-1]) != 0, na.rm = TRUE)
+num_nas_byCol <- colSums(is.na(filled_sperm_recode))
+rawAccuracy <- data.frame(val=((num_snps - num_mismatches_sperm_haplotype)/num_snps * 100), name="Raw") 
+message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val)))
+correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
+message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val)))
+accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
+
+if (write_out_plot){
+  filename = paste0(outDir, "simulated_sperm_hap_reconstruction.pdf")
+  pdf(file=filename)
+  ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="Sperm Haplotype Reconstruction") + scale_y_continuous(name="accuracy", breaks=c(98.75, 99, 99.25, 99.5, 99.75, 100), labels=c(98.75, 99, 99.25, 99.5, 99.75, 100), limits=c(98.75, 100))
+  dev.off()
+}
+
 td_test <- function(sperm_matrix, row_index) {
   test_row <- sperm_matrix[row_index,]
   gt_vector <- unlist(test_row)[-1]
@@ -435,8 +469,10 @@ df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
  as_tibble() %>%
  add_column(positions) #bind the positions vector to df_counts_pvals
 colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
-filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim.csv")
-write_csv(df_counts_pvals, filename_df)
+if (write_out_plot){
+  filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim.csv")
+  write_csv(df_counts_pvals, filename_df)
+}
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
@@ -466,55 +502,44 @@ recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
                                               mc.cores=getOption("mc.cores", threads))) %>%
   right_join(., tibble(Ident = idents_for_csv), by = "Ident")
 
-#Prepare a dataframe for the true crossover locations that can be passed to bedr
-sperm_ident <- paste0(rep("sperm", num_sperm), 1:num_sperm, "_")
-names(crossover_indices) <- sperm_ident
+###Prepare a truth dataframe for the true crossover locations that is bedr compatible
+##Note bedr has to have different start and end values and cannot handle NAs
+names(crossover_indices) <- paste0(rep("sperm", num_sperm), 1:num_sperm, "_")
 unlist_ci <- unlist(crossover_indices, use.names=TRUE) #just a list with a single row for each crossover, rowname corresponds to the sperm _1, _2, etc for sperm with more than one CO
-#bedr has to have different starts and ends and cannot handle NAs
 ci_df <- data.frame(chr=rep(as.character(chrom), length(unlist_ci)), start=(unlist_ci-1), end=(unlist_ci))
 row.names(ci_df) <- names(unlist_ci)
-truth_nona_df <- drop_na(ci_df) #this one has all valid regions for bedr
-truth_onlyna_df <- ci_df[is.na(ci_df$start),] #this one is to check all the ones that don't have any recombination spots
-truth_nona_df_sort <- bedr.sort.region(truth_nona_df) #these are the true recombination spots, with no NAs, lexicographically sorted
+truth_onlyna_df <- ci_df[is.na(ci_df$start),] #this one is to check all the gametes that don't have any true recombination spots
+truth_nona_df_sort <- bedr.sort.region(drop_na(ci_df)) #these are the true recombination spots, valid regions with no NAs, lexicographically sorted
 
-
-#make another bedr compatible dataframe for the predicted crossover locations
+###Prepare a prediction  dataframe for the predicted crossover locations that is bedr compatible
 split_idents <- str_split(recomb_spots_all$Ident, "_", simplify=TRUE)
 recomb_spots_df <- data.frame(chr=as.character(split_idents[,2]), start=recomb_spots_all$Genomic_start, end=recomb_spots_all$Genomic_end)
 row.names(recomb_spots_df) <- make.names(paste0(split_idents[,3], "_"), unique=TRUE)
-#bedr cannot handle NAs
-pred_nona_df <- drop_na(recomb_spots_df) #this one has all valid regions for bedr
-pred_onlyna_df <- recomb_spots_df[is.na(recomb_spots_df$start),] #this one is to check all the ones that don't have any recombination spots
-pred_nona_df_sort <- bedr.sort.region(pred_nona_df) #these are the predicted recombination spots, with no NAs, lexicographically sorted
-
-##plot the resolution of predicted recombination break point regions
-filename = paste0(outDir, "simulated_recombination_resolution.pdf")
-pdf(file=filename)
-hist(recomb_spots_df$end - recomb_spots_df$start, xlab = "Differince in SNP index", breaks=100, main="Resolution of predicted recombination break point regions")
-dev.off()
+pred_onlyna_df <- recomb_spots_df[is.na(recomb_spots_df$start),] #this one is to check all the gametes that don't have any predicted recombination spots
+pred_nona_df_sort <- bedr.sort.region(drop_na(recomb_spots_df)) #these are the predicted recombination spots, valid regions with no NAs, lexicographically sorted
 
 truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
                   method = "intersect",
                   params = "-loj -sorted") #those that aren't overlapping will be reported as NULL for b (. -1 -1). Those are fn
 colnames(truth_pred_int) <- c("truth_chr", "truth_start", "truth_end", "pred_chr", "pred_start", "pred_end")
+truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
+fn_pt1 <- nrow(truth_pred_int[truth_pred_int$pred_chr == ".",]) #false negative because there is no overlapping predicted recombination for a true recombination spot, accomplished by finding the number of locations that are null in prediction column when truth intersected with prediction
+fn_pt2 <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df))) #predicted returns only NA when there is at least one truth rownames in the prediction but not in the truth
+
+
+tp_cons <- length(unique(paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by the length of the unique prediction identities from the non NA intersection
+tp_lib <- nrow(truth_pred_int_nona) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction. accomplish this by counting number of truths that intersect any prediction from the non NA intersection
+
 pred_truth_int <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
                        method = "intersect",
                        params = "-loj -sorted")
 colnames(pred_truth_int) <- c("pred_chr", "pred_start", "pred_end", "truth_chr", "truth_start", "truth_end")
-pred_v <- pred_truth_int[pred_truth_int$truth_chr == ".",] #nrow of this is fp
 
-truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
-pred_idents <- paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end)
-tp_cons <- length(unique(pred_idents))
-tp_lib <- nrow(truth_pred_int)
 
-fp <- nrow(pred_v)
+fp <- nrow(pred_truth_int[pred_truth_int$truth_chr == ".",]) #number predicted as recombination spots, but don't intersect with truth at all
 
-fn_pt3 <- tp_lib - nrow(truth_pred_int_nona)
-fn_pt1 <- nrow(truth_pred_int[truth_pred_int$pred_chr == ".",])
-fn_pt2 <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df))) #rownames in the prediction but not in the truth
 fn_lib <- fn_pt1 + fn_pt2
-fn_cons <- fn_pt1 + fn_pt2 + fn_pt3
+fn_cons <- fn_pt1 + fn_pt2 + (tp_lib - nrow(truth_pred_int_nona)) #include overflow intersections, or when multiple truths intersect a single prediction 
 
 tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
 
@@ -552,61 +577,33 @@ message(paste0("Liberal recombination spot identification metrics\nPrecision: ",
                "\nFDR: ", metrics_lib$fdr,
                "\nFPR: ", metrics_lib$fpr))
 
-real_reads <- rowSums(!is.na(sperm_na_df))
-filename = paste0(outDir, "simulated_notna_bysnp.pdf")
-pdf(file=filename)
-hist(real_reads, breaks=150, xlab="not NA by SNP", main="Distribution of simulated data not NA by SNP")
-dev.off()
-
-real_reads2 <- colSums(!is.na(sperm_na_df))
-filename = paste0(outDir, "simulated_notna_bysperm.pdf")
-pdf(file=filename)
-hist(real_reads2, breaks=100, xlab="not NA by sperm", main="Distribution of simulated data not NA by sperm")
-dev.off()
-
-## Assessing the accuracy of parental haplotype reconstruction
-#complete_haplotypes compared to simulated hap1 and hap2
-num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - parental_haps$Parental1) != 0, na.rm=TRUE), sum((complete_haplotypes$h1 - parental_haps$Parental2) != 0, na.rm=TRUE))
-accuracy_parental1 <- (num_snps - num_mismatch_parental1) / num_snps * 100
-message(paste0("Parental haplotype reconstruction accuracy: ", accuracy_parental1))
-if (sum(is.na(complete_haplotypes$h1))> 0){
-  num_na_h1 <- sum(is.na(complete_haplotypes$h1))
-  accuracy_parental1_cor <- (((num_snps - num_na_h1) - num_mismatch_parental1)/(num_snps - num_na_hap1)) * 100
-  message(past0("Parental haplotype reconstruction accuracy, corrected: ", accuracy_parental1_cor))
-}
-
-if (add_de_novo_mut){
-  mismatches_parental <- which((complete_haplotypes$h1 -  parental_haps$Parental1)  != 0)
-  filename = paste0(outDir, "simulated_parental_mismatch_loc.pdf")
+if (write_out_plot){
+  ###Plot the resolution of predicted recombination break point regions
+  filename = paste0(outDir, "simulated_recombination_resolution.pdf")
   pdf(file=filename)
-  plot(c(mismatches_parental, new_rows), c(rep(1, length(mismatches_parental)), rep(1.05, length(new_rows))), cex=0.2, col=c(rep(rgb(red=0, green=0, blue=0, alpha=0.2), length(mismatches_parental)), rep(rgb(red=1, green=0, blue=0, alpha=0.8), length(new_rows))))
+  hist(recomb_spots_df$end - recomb_spots_df$start, xlab = "Differince in SNP index", breaks=100, main="Resolution of predicted recombination break point regions")
   dev.off()
-}
   
-## Assessing the accuracy of gamete haplotype reconstruction
-re_recode_gametes <- function(dt, complete_haplotypes) {
-  to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
-  for (i in 1:ncol(dt)) {
-    locs_h1 <- dt[,i] == "haplotype1"
-    locs_h1[which(is.na(locs_h1))] <- FALSE
-    locs_h2 <- dt[,i] == "haplotype2"
-    locs_h2[which(is.na(locs_h2))] <- FALSE
-    to_return[locs_h1, i] <- complete_haplotypes$h1[locs_h1]
-    to_return[locs_h2, i] <- complete_haplotypes$h2[locs_h2]
+  ###Plot the distribution of sparsity by row/SNP in the simulated gamete data
+  real_reads <- rowSums(!is.na(sperm_na_df))
+  filename = paste0(outDir, "simulated_notna_bysnp.pdf")
+  pdf(file=filename)
+  hist(real_reads, breaks=150, xlab="not NA by SNP", main="Distribution of simulated data not NA by SNP")
+  dev.off()
+  
+  ###Plot the distribution of sparsity by column/gamete in the simulated gamete data
+  real_reads2 <- colSums(!is.na(sperm_na_df))
+  filename = paste0(outDir, "simulated_notna_bysperm.pdf")
+  pdf(file=filename)
+  hist(real_reads2, breaks=100, xlab="not NA by sperm", main="Distribution of simulated data not NA by sperm")
+  dev.off()
+  
+  ###Plot where the de novo mutations are with respect to the mismatches in parental haplotypes and inference of parental haplotypes
+  if (add_de_novo_mut){
+    mismatches_parental <- which((complete_haplotypes$h1 -  parental_haps$Parental1)  != 0)
+    filename = paste0(outDir, "simulated_parental_mismatch_loc.pdf")
+    pdf(file=filename)
+    plot(c(mismatches_parental, new_rows), c(rep(1, length(mismatches_parental)), rep(1.05, length(new_rows))), cex=0.2, col=c(rep(rgb(red=0, green=0, blue=0, alpha=0.2), length(mismatches_parental)), rep(rgb(red=1, green=0, blue=0, alpha=0.8), length(new_rows))))
+    dev.off()
   }
-  return(to_return)
 }
-
-filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
-num_mismatches_sperm_haplotype <- colSums((filled_sperm_recode - sperm_full_df[,-1]) != 0, na.rm = TRUE)
-num_nas_byCol <- colSums(is.na(filled_sperm_recode))
-rawAccuracy <- data.frame(val=((num_snps - num_mismatches_sperm_haplotype)/num_snps * 100), name="Raw") 
-message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val)))
-correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
-message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val)))
-accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
-
-filename = paste0(outDir, "simulated_sperm_hap_reconstruction.pdf")
-pdf(file=filename)
-ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="Sperm Haplotype Reconstruction") + scale_y_continuous(name="accuracy", breaks=c(98.75, 99, 99.25, 99.5, 99.75, 100), labels=c(98.75, 99, 99.25, 99.5, 99.75, 100), limits=c(98.75, 100))
-dev.off()
