@@ -15,16 +15,16 @@ window_length <- 3000 #as.integer(args[2])
 seqError <- 0.05
 hapProb <- 1 - seqError
 
-num_sperm <- 5000 #as.integer(args[3])
-num_snps <- 5000 #as.integer(args[4])
-coverage <- 0.0001 #as.numeric(args[5])
+num_sperm <- 9600 #as.integer(args[3])
+num_snps <-  5000 #as.integer(args[4])
+coverage <- 0.001 #as.numeric(args[5])
 
 num_genotypes <- num_sperm * num_snps
 missing_genotype_rate <- dpois(0, coverage)
 message(paste0("The missing genotype rate of this simulation is ", missing_genotype_rate))
 num_nas <- floor(num_genotypes * missing_genotype_rate)
 
-random_seed <- 42 #as.integer(args[2]) #42
+random_seed <- 42 #42 #as.integer(args[2]) #42
 set.seed(random_seed)
 
 recomb_lambda <- 1
@@ -69,7 +69,7 @@ generate_sperm <- function(parental_haplotypes, n_crossovers){
     return(list(NA, init_hap, rep(init_hap_index, length(init_hap))))
   } else {
     n_snps <- length(init_hap)
-    crossover_indices <- sample(1:n_snps, n_crossovers)
+    crossover_indices <- sample(2:(n_snps-1), n_crossovers) #limiting it so that crossover locations can't be at the beginning or end to avoid the edge effect
     crossover_indices <- crossover_indices[order(crossover_indices)]
     recombined_hap <- init_hap
     recombined_hap_index <- rep(init_hap_index-1, n_snps) #recode 1's to 0's or 2's to 1's and store the initial haplotype at all SNP locations 
@@ -163,6 +163,7 @@ sperm_na_df <- sperm_na_df[keep_bool,]
 sperm_full_df <- sperm_full_df[keep_bool,]
 parental_haps <- parental_haps[keep_bool,]
 num_snps <- sum(keep_bool)
+#if (num_snps == 0) {quit with error message}
 message(paste0("new number of snps: ", num_snps))
 if (add_de_novo_mut) {
   `%notin%` <- Negate(`%in%`)
