@@ -1,16 +1,3 @@
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 42 1 &> run_sim3_20210218/wl3000_gam1000_snp30000_cov0.01/rsd42.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 386 1 &> run_sim3_20210218/wl3000_gam1000_snp30000_cov0.01/rsd386.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 1059 1 &> run_sim3_20210218/wl3000_gam1000_snp30000_cov0.01/rsd1059.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 27 1 &> run_sim3_20210218/wl3000_gam1000_snp30000_cov0.01/rsd27.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 651 1 &> run_sim3_202102018/wl3000_gam1000_snp30000_cov0.01/rsd651.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 2862 1 &> run_sim3_202102018/wl3000_gam1000_snp30000_cov0.01/rsd2862.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 2556 1 &> run_sim3_202102018/wl3000_gam1000_snp30000_cov0.01/rsd2556.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 2563 1 &> run_sim3_202102018/wl3000_gam1000_snp30000_cov0.01/rsd2563.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 3417 1 &> run_sim3_202102018/wl3000_gam1000_snp30000_cov0.01/rsd3417.txt
-#date; time Rscript test_metrics.R 2 3000 1000 30000 0.01 4900 1 &> run_sim3_202102018/wl3000_gam1000_snp30000_cov0.01/rsd4900.txt
-
-
-
 library(data.table)
 library(tidyverse)
 library(stringr)
@@ -22,22 +9,22 @@ library(bedr)
 args <- commandArgs(trailingOnly = TRUE)
 sampleName <- "simTest"
 chrom <- "chrT"
-threads <- as.integer(args[1])
+threads <- 2L #as.integer(args[1])
 
-window_length <- as.integer(args[2])
+window_length <- 3000 #as.integer(args[2])
 seqError <- 0.05
 hapProb <- 1 - seqError
 
-num_sperm <- as.integer(args[3])
-num_snps <- as.integer(args[4])
-coverage <- as.numeric(args[5])
+num_sperm <- 5000 #as.integer(args[3])
+num_snps <- 5000 #as.integer(args[4])
+coverage <- 0.0001 #as.numeric(args[5])
 
 num_genotypes <- num_sperm * num_snps
 missing_genotype_rate <- dpois(0, coverage)
 message(paste0("The missing genotype rate of this simulation is ", missing_genotype_rate))
 num_nas <- floor(num_genotypes * missing_genotype_rate)
 
-random_seed <- as.integer(args[6])
+random_seed <- 42 #as.integer(args[2]) #42
 set.seed(random_seed)
 
 recomb_lambda <- 1
@@ -46,11 +33,14 @@ message(paste0("Total number of recombination spots across gametes: ", sum(num_r
 
 add_seq_error <- TRUE
 seqError_add <- 0.05
-add_de_novo_mut <- as.logical(args[7])
+add_de_novo_mut <- TRUE #as.logical(args[3])
 de_novo_lambda <- 5
 de_novo_alpha <- 7.5
 de_novo_beta <- 10
 stopifnot(de_novo_beta > 0)
+
+smooth_imputed_genotypes <- FALSE
+smooth_crossovers <- TRUE
 
 ###Genenrate 2 parental chromosomes of heterozygous sites
 hap1 <- data.frame(V1 = sample(c(0, 1), size = num_snps, replace = TRUE)) #simulate first parental chromosome
@@ -186,12 +176,14 @@ positions <- sperm_na_df[, 1]
 sperm_na_df <- sperm_na_df[,-1]
 
 # this function gets the mode of a vector after removing the NAs
+#old function works without NAs in complete_haplotypes
 getmode <- function(v) {
   uniqv <- unique(v)
   uniqv <- uniqv[!is.na(uniqv)]
   uniqv[which.max(tabulate(match(v, uniqv)))]
 }
 
+#new function but NAs likely in complete_haplotypes
 #getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
 #  ux <- unique(na.omit(x))
 #  tx <- tabulate(match(x, ux))
@@ -295,6 +287,7 @@ num_mismatch_parental1 <- min(sum((complete_haplotypes$h1 - parental_haps$Parent
 num_nas_parental1 <- min(sum(is.na(complete_haplotypes$h1 - parental_haps$Parental1)), sum(is.na(complete_haplotypes$h1 - parental_haps$Parental2)))
 accuracy_parental1 <- (num_snps - (num_mismatch_parental1 + num_nas_parental1))/ num_snps * 100
 message(paste0("Parental haplotype reconstruction accuracy: ", accuracy_parental1))
+message(paste0("Parental measure of sparsity: ",(1 - (num_nas_parental1/num_snps))))
 if (sum(is.na(complete_haplotypes$h1))> 0){
   num_na_h1 <- sum(is.na(complete_haplotypes$h1))
   accuracy_parental1_cor <- (((num_snps - num_na_h1) - num_mismatch_parental1)/(num_snps - num_na_h1)) * 100
@@ -375,38 +368,16 @@ filled_sperm <- as_tibble(do.call(cbind,
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(sperm_na_df)
 
-if (!smooth){
-  original_dt <- dt %>% 
+unsmooth <- function(original_gamete_df, filled_gamete_data) {
+  original_dt <- original_gamete_df %>% 
     mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
     mutate_all(funs(str_replace(., "h2", "haplotype2")))
   original_dt <- as.data.frame(original_dt)
-  filled_sperm <- as.data.frame(filled_sperm)
-  filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
-  filled_sperm <- as_tibble(filled_sperm)
+  filled_gamete_data <- as.data.frame(filled_gamete_data)
+  filled_gamete_data[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
+  filled_gamete_data <- as_tibble(filled_gamete_data)
+  return (filled_gamete_data)
 }
-
-###Assessing the accuracy of gamete haplotype reconstruction
-re_recode_gametes <- function(dt, complete_haplotypes) {
-  to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
-  for (i in 1:ncol(dt)) {
-    locs_h1 <- dt[,i] == "haplotype1"
-    locs_h1[which(is.na(locs_h1))] <- FALSE
-    locs_h2 <- dt[,i] == "haplotype2"
-    locs_h2[which(is.na(locs_h2))] <- FALSE
-    to_return[locs_h1, i] <- complete_haplotypes$h1[locs_h1]
-    to_return[locs_h2, i] <- complete_haplotypes$h2[locs_h2]
-  }
-  return(to_return)
-}
-
-filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
-num_mismatches_sperm_haplotype <- colSums((filled_sperm_recode - sperm_full_df[,-1]) != 0, na.rm = TRUE)
-num_nas_byCol <- colSums(is.na(filled_sperm_recode))
-rawAccuracy <- data.frame(val=((num_snps - (num_mismatches_sperm_haplotype + num_nas_byCol))/num_snps * 100), name="Raw") 
-message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val, na.rm=TRUE)))
-correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
-message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val, na.rm=TRUE)))
-accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
@@ -430,11 +401,22 @@ find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
   return(recomb_spots)
 }
 
-idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
-recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
-                                              function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
-                                              mc.cores=getOption("mc.cores", threads))) %>%
-  right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+if (!smooth_crossovers){
+  filled_sperm_recomb <- unsmooth(sperm_na_df, filled_sperm)
+  idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm_recomb))
+  recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm_recomb),
+                                                function(x) find_recomb_spots(filled_sperm_recomb, x, idents_for_csv, positions),
+                                                mc.cores=getOption("mc.cores", threads))) %>%
+    right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+} else {
+  idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
+  recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
+                                                function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
+                                                mc.cores=getOption("mc.cores", threads))) %>%
+    right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+}
+
+
 
 ###Prepare a truth dataframe for the true crossover locations that is bedr compatible
 ##Note bedr has to have different start and end values and cannot handle NAs
@@ -566,3 +548,35 @@ if (no_truths & no_preds){
                 "\nFDR: ", metrics_lib$fdr,
                 "\nFPR: ", metrics_lib$fpr))
 }
+
+###Assessing the accuracy of gamete haplotype reconstruction
+re_recode_gametes <- function(dt, complete_haplotypes) {
+  to_return <- data.frame(matrix(NA_real_, nrow=nrow(dt), ncol=ncol(dt)))
+  for (i in 1:ncol(dt)) {
+    locs_h1 <- dt[,i] == "haplotype1"
+    locs_h1[which(is.na(locs_h1))] <- FALSE
+    locs_h2 <- dt[,i] == "haplotype2"
+    locs_h2[which(is.na(locs_h2))] <- FALSE
+    to_return[locs_h1, i] <- complete_haplotypes$h1[locs_h1]
+    to_return[locs_h2, i] <- complete_haplotypes$h2[locs_h2]
+  }
+  return(to_return)
+}
+
+if (!smooth_imputed_genotypes & smooth_crossovers){
+  filled_sperm <- unsmooth(sperm_na_df, filled_sperm)
+  filled_sperm_recode <- re_recode_gametes(filled_sperm, complete_haplotypes)
+} else if(!smooth_imputed_genotypes & !smooth_crossovers){
+  filled_sperm_recode <- re_recode_gametes(filled_sperm_recomb, complete_haplotypes)
+} else { 
+  filled_sperm_recode <- re_recode_gamets(filled_sperm, complete_haplotypes)
+}
+
+num_mismatches_sperm_haplotype <- colSums((filled_sperm_recode - sperm_full_df[,-1]) != 0, na.rm = TRUE)
+num_nas_byCol <- colSums(is.na(filled_sperm_recode))
+rawAccuracy <- data.frame(val=((num_snps - (num_mismatches_sperm_haplotype + num_nas_byCol))/num_snps * 100), name="Raw") 
+message(paste0("Mean sperm haplotype reconstruction accuracy (raw): ", mean(rawAccuracy$val, na.rm=TRUE)))
+correctedAccuracy <- data.frame(val=(((num_snps - num_nas_byCol) - num_mismatches_sperm_haplotype)/(num_snps - num_nas_byCol) * 100), name="Corrected")
+message(paste0("Mean sperm haplotype reconstruction accuracy (corrected): ", mean(correctedAccuracy$val, na.rm=TRUE)))
+message(paste0("Mean gamete measure of sparsity: ", mean(1 - (num_nas_byCol/num_snps), na.rm=TRUE)))
+#accuracyDat <- rbind(rawAccuracy, correctedAccuracy)
