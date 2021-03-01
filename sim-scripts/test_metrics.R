@@ -298,7 +298,7 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
 for (i in 1:ncol(sperm_na_df)) {
   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h1] <- "h1"
   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h2] <- "h2"
-  sperm_na_df[c(which(sperm_na_df[,i] == 0 | sperm_na_df[,i] == 1)),] <- NA
+  sperm_na_df[c(which(sperm_na_df[,i] == 0 | sperm_na_df[,i] == 1)),i] <- NA
 }
 
 # Scan sperm by sperm to interpret state given emission
