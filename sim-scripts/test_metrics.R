@@ -15,9 +15,9 @@ window_length <- 3000 #as.integer(args[2])
 seqError <- 0.05
 hapProb <- 1 - seqError
 
-num_sperm <- 9600 #as.integer(args[3])
-num_snps <-  5000 #as.integer(args[4])
-coverage <- 0.001 #as.numeric(args[5])
+num_sperm <- 1000 #as.integer(args[3])
+num_snps <-  30000 #as.integer(args[4])
+coverage <- 0.01 #as.numeric(args[5])
 
 num_genotypes <- num_sperm * num_snps
 missing_genotype_rate <- dpois(0, coverage)
@@ -178,24 +178,22 @@ sperm_na_df <- sperm_na_df[,-1]
 
 # this function gets the mode of a vector after removing the NAs
 #old function works without NAs in complete_haplotypes
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv <- uniqv[!is.na(uniqv)]
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-#new function but NAs likely in complete_haplotypes
-#getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
-#  ux <- unique(na.omit(x))
-#  tx <- tabulate(match(x, ux))
-#  if(length(ux) != 1 & sum(max(tx) == tx) > 1) {
-#    if (is.character(ux)) return(NA_character_) else return(NA_real_)
-#  }
-#  max_tx <- tx == max(tx)
-#  return(ux[max_tx])
+#getmode <- function(v) {
+#  uniqv <- unique(v)
+#  uniqv <- uniqv[!is.na(uniqv)]
+#  uniqv[which.max(tabulate(match(v, uniqv)))]
 #}
 
-
+#new function but NAs likely in complete_haplotypes
+getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
+  ux <- unique(na.omit(x))
+  tx <- tabulate(match(x, ux))
+  if(length(ux) != 1 & sum(max(tx) == tx) > 1) {
+    if (is.character(ux)) return(NA_character_) else return(NA_real_)
+  }
+  max_tx <- tx == max(tx)
+  return(ux[max_tx])
+}
 
 invertBits <- function(df) {
   return(abs(df-1))
@@ -300,6 +298,7 @@ if (sum(is.na(complete_haplotypes$h1))> 0){
 for (i in 1:ncol(sperm_na_df)) {
   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h1] <- "h1"
   sperm_na_df[i][sperm_na_df[i] == complete_haplotypes$h2] <- "h2"
+  sperm_na_df[c(which(sperm_na_df[,i] == 0 | sperm_na_df[,i] == 1)),] <- NA
 }
 
 # Scan sperm by sperm to interpret state given emission
