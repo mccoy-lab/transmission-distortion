@@ -3,32 +3,19 @@ library(pbapply)
 library(pbmcapply)
 library(HMM)
 
-#args <- commandArgs(trailingOnly = TRUE)
-#input_file <- args[1]
-#sampleName <- args[2]
-#chrom <- args[3]
-#outDir <- args[4]
-#seqError <- as.numeric(args[5]) #0.005
-#hapProb <- 1 - seqError
-#threads <- as.integer(args[6])
-#window_length <- as.integer(args[7]) #want 3000
-#smooth <- as.logical(args[8]) #if true, will run as usual; if false, will superimpose original non-na genotype
-
-input_file <- "~/mccoyLab_withOthers/transmission-distortion/test_data_to_save/nc26abcd_euploid_4.txt"
-sampleName <- "nc26abcd"
-chrom <- 4
-outDir <- "~/tmp/"
+args <- commandArgs(trailingOnly = TRUE)
+input_file <- args[1]
+blacklist_file <- args[2]
+giab_file <- args[3]
+sampleName <- args[4]
+chrom <- args[5]
+outDir <- args[6]
 seqError <- 0.005
 hapProb <- 1 - seqError
-threads <- 2
-window_length <- 3000 #2500 default, if error raised -- retry with 1000 and 5000 also
-smooth <- FALSE
-
-# load the data
-# dt <- read_delim(input_file, delim = "\t") %>%
-#   pivot_wider(., names_from = "cell", values_from = "gt") %>%
-#   arrange(., pos) %>%
-#   as.data.frame()
+threads <- as.integer(args[7])
+window_length <- 3000
+smooth_imputed_genotypes <- FALSE
+smooth_crossovers <- TRUE
 
 dt <- read_delim(input_file, delim = "\t", col_types = cols(.default = "d")) %>% 
   as.data.frame()
@@ -37,14 +24,38 @@ dt <- dt[((rowSums(dt[, 2:ncol(dt)] == 0, na.rm = TRUE) > 0) & (rowSums(dt[, 2:n
 
 # remove the first column (positions)
 positions <- dt[, 1]
+# Read in materials necessary for filtering 
+# First, the encode blacklist; we want to exclude the positions here  
+blacklist <- read_delim(blacklist_file, col_names = FALSE, delim = "\t") %>% 
+  as.data.table()
+colnames(blacklist) <- c("chr", "start", "end")
+# Next, the genome in a bottle (giab); we want to include only the positions here 
+giab_union <- read.table(giab_file, sep = "\t", header = FALSE) %>% as.data.table()
+colnames(giab_union) <- c("chr", "start", "end")
+# do not offer this to the package they can filter their own input data 
+'%!in%' <- function(x,y)!('%in%'(x,y))
+filter_problem_genome <- function(chrom, positions, blacklist, giab_union) {
+  col_chr_name <- paste0("chr", chrom)
+  new_positions <- positions %>% as.data.table()
+  new_positions[, chr := col_chr_name]
+  new_positions[, start := positions]
+  new_positions[, end := positions]
+  # Find regions in the raw data that are in the blacklist 
+  blacklist_chr <- blacklist[blacklist$chr == col_chr_name] # select chr of interest 
+  setkey(blacklist_chr, start, end)
+  blacklisted <- data.table::foverlaps(new_positions, blacklist_chr, type="any", nomatch=NULL)
+  pos_not_blacklist <- new_positions[new_positions$. %!in% blacklisted$positions,]
+  # Select entries in giab from chr of interest 
+  giab_chr <- giab_union[giab_union$chr == col_chr_name,] %>% as.data.table()
+  # Find overlaps between giab and our data table (excluding the blacklisted sites) 
+  setkey(giab_chr, start, end)
+  in_union <- data.table::foverlaps(pos_not_blacklist, giab_chr, type="any", nomatch=NULL)
+  return(in_union)
+}
+in_union <- filter_problem_genome(chrom, positions, blacklist, giab_union)
+dt <- dt[dt$positions %in% in_union$.,]
+positions <- dt[, 1]
 dt <- dt[, -1]
-
-# this function gets the mode of a vector after removing the NAs
-#getmode <- function(v) {
-#  uniqv <- unique(v)
-#  uniqv <- uniqv[!is.na(uniqv)]
-#  uniqv[which.max(tabulate(match(v, uniqv)))]
-#}
 
 getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
   ux <- unique(na.omit(x))
@@ -55,14 +66,6 @@ getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no
   max_tx <- tx == max(tx)
   return(ux[max_tx])
 }
-
-# this function replaces 0s with 1s and 1s with 0s in a data frame
-#invertBits <- function(df) {
-#  df[df == 0] <- -1
-#  df[df == 1] <- 0
-#  df[df == -1] <- 1
-#  return(df)
-#}
 
 invertBits <- function(df) {
   return(abs(df-1))
@@ -80,11 +83,17 @@ splitWithOverlap <- function(vec, seg.length, overlap) {
 windows <- splitWithOverlap(rank(positions), window_length, overlap = window_length / 2)
 
 # merge the last two windows to avoid edge effect
-combined <- unique(c(windows[[length(windows) - 1]], windows[[length(windows)]]))
-combined <- combined[order(combined)]
-total_combined <- windows[-c((length(windows) - 1), length(windows))]
-total_combined[[length(total_combined) + 1]] <- combined
-windows <- total_combined
+if (length(windows) > 1){
+  combined <- unique(c(windows[[length(windows) - 1]], windows[[length(windows)]]))
+  combined <- combined[order(combined)]
+  total_combined <- windows[-c((length(windows) - 1), length(windows))]
+  total_combined[[length(total_combined) + 1]] <- combined
+  windows <- total_combined
+}
+
+num_snps <- nrow(dt)
+message(paste0("Number of windows with overlap of ", window_length / 2 , " and ", num_snps, " number of SNPs following filtering: ", length(windows)))
+
 
 # function to reconstruct parental haplotypes
 reconstruct_hap <- function(input_dt, input_positions, window_indices) {
@@ -156,6 +165,7 @@ write_csv(complete_haplotypes, filename_hap)
 for (i in 1:ncol(dt)) {
   dt[i][dt[i] == complete_haplotypes$h1] <- "h1"
   dt[i][dt[i] == complete_haplotypes$h2] <- "h2"
+  dt[c(which(dt[,i] == 0 | dt[,i] == 1)),i] <- NA
 }
 
 # Scan sperm by sperm to interpret state given emission
@@ -229,33 +239,20 @@ filled_sperm <- as_tibble(do.call(cbind,
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(dt)
 
-if (!smooth){
-  original_dt <- dt %>% 
+unsmooth <- function(original_gamete_df, filled_gamete_data) {
+  original_dt <- original_gamete_df %>% 
     mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
     mutate_all(funs(str_replace(., "h2", "haplotype2")))
   original_dt <- as.data.frame(original_dt)
-  filled_sperm <- as.data.frame(filled_sperm)
-  filled_sperm[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
-  filled_sperm <- as_tibble(filled_sperm)
+  filled_gamete_data <- as.data.frame(filled_gamete_data)
+  filled_gamete_data[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
+  filled_gamete_data <- as_tibble(filled_gamete_data)
+  return (filled_gamete_data)
 }
 
-td_test <- function(sperm_matrix, row_index) {
-  test_row <- sperm_matrix[row_index,]
-  gt_vector <- unlist(test_row)[-1]
-  one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
-  two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
-  p_value <- binom.test(c(one_count, two_count))$p.value
-  return(c(p_value, one_count, two_count))
-}
-
-df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
-                                             function(x) td_test(filled_sperm, x),
-                                             mc.cores=getOption("mc.cores", threads))) %>%
-  as_tibble() %>%
-  add_column(positions) #bind the positions vector to df_counts_pvals
-colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
-filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
-write_csv(df_counts_pvals, filename_df)
+#potentially use this instead of mutate_all
+#  dt[dt == "haplotype1"] <- "h1"
+#  dt[dt == "haplotype2"] <- "h2"
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
@@ -279,10 +276,46 @@ find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
   return(recomb_spots)
 }
 
-idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
-recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
-                                              function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
-                                              mc.cores=getOption("mc.cores", threads))) %>% 
-  right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+if (!smooth_crossovers){
+  filled_sperm_recomb <- unsmooth(dt, filled_sperm)
+  idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm_recomb))
+  recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm_recomb),
+                                                function(x) find_recomb_spots(filled_sperm_recomb, x, idents_for_csv, positions),
+                                                mc.cores=getOption("mc.cores", threads))) %>%
+    right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+} else {
+  idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_sperm))
+  recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_sperm),
+                                                function(x) find_recomb_spots(filled_sperm, x, idents_for_csv, positions),
+                                                mc.cores=getOption("mc.cores", threads))) %>%
+    right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+}
+
 filename_rs <- paste0(outDir, sampleName, "_", chrom, "_recombination_locs.csv")
 write_csv(recomb_spots_all, filename_rs)
+
+if (!smooth_imputed_genotypes & smooth_crossovers){
+  filled_sperm <- unsmooth(dt, filled_sperm)
+} else if(!smooth_imputed_genotypes & !smooth_crossovers){
+  filled_sperm <- filled_sperm_recomb
+}
+
+
+td_test <- function(sperm_matrix, row_index) {
+  test_row <- sperm_matrix[row_index,]
+  gt_vector <- unlist(test_row)[-1]
+  one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
+  two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
+  p_value <- binom.test(c(one_count, two_count))$p.value
+  return(c(p_value, one_count, two_count))
+}
+
+df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_sperm),
+                                             function(x) td_test(filled_sperm, x),
+                                             mc.cores=getOption("mc.cores", threads))) %>%
+  as_tibble() %>%
+  add_column(positions) #bind the positions vector to df_counts_pvals
+colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
+filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval.csv")
+write_csv(df_counts_pvals, filename_df)
+
