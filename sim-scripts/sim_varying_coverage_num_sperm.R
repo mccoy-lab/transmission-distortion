@@ -366,14 +366,39 @@ completeness <- function(predicted, num_snps){
   return (to_return)
 }
 
+lhs <- function(truth, predicted){ #need to figure out two dimensional case, call with apply?
+  match01_encoding <- predicted - truth #match is a 0, mismatch is a 1 | -1
+  rleres <- rle(match01_encoding) #any match location will be 0
+  to_return <- max(rleres$lengths[which(rleres$values == 0)]) #find longest length of matches
+  return (to_return)
+}
+
+ser <- function(truth, predicted, num_snps){ #also call with apply?
+  match01_encoding <- predicted - truth #match is a 0, mismatch is a 1 | -1
+  which_mismatch <- which(match01_encoding != 0)
+  comp_with_before <- abs(diff(match01_encoding))[which_mismatch - 1]
+  switch_errors <- sum(comp_with_before == 1, na.rm=TRUE) #if comp_with_before values are 0 or 2, then the value is a continuation following another error; if 1, it's a new switch error
+  to_return <- switch_errors / num_snps
+  return (to_return)
+}
+
 ###Assessing the accuracy of parental haplotype reconstruction
 accuracy_par_igna <- 100 - min(hamming_distance_ignoreNA(parental_haps$Parental1, complete_haplotypes$h1, num_snps),
                                hamming_distance_ignoreNA(parental_haps$Parental2, complete_haplotypes$h1, num_snps))
 
 completeness_par <- completeness(complete_haplotypes$h1, num_snps)
 
+lhs_par <- max(lhs(parental_haps$Parental1, complete_haplotypes$h1),
+               lhs(parental_haps$Parental2, complete_haplotypes$h1))
+
+ser_par <- min(ser(parental_haps$Parental1, complete_haplotypes$h1, num_snps),
+               ser(parental_haps$Parental2, complete_haplotypes$h1, num_snps))
+
+
 message(paste0("Phasing accuracy: ", accuracy_par_igna))
 message(paste0("Phasing completeness: ", completeness_par))
+message(paste0("Phasing LHS: ", lhs_par))
+message(paste0("Phasing SER: ", ser_par))
 
 
 # Going through each gamete, if an allele (0 or 1) in a gamete matches the allele (0 or 1)
@@ -523,11 +548,13 @@ if (!smooth_imputed_genotypes & smooth_crossovers){
 
 accuracy_gam <- 100-hamming_distance_ignoreNA(gam_full_df[,-1], filled_gam_recode, num_snps)
 completeness_gam <- completeness(filled_gam_recode, num_snps)
+lhs_gam <- do.call(rbind, lapply(1:num_gametes,function(x) lhs(gam_full_df[,-1][,x], filled_gam_recode[,x])))
+ser_gam <- do.call(rbind, lapply(1:num_gametes,function(x) ser(gam_full_df[,-1][,x], filled_gam_recode[,x], num_snps)))
+
 message(paste0("Mean gamete haplotype reconstruction accuracy: ", mean(accuracy_gam, na.rm=TRUE)))
 message(paste0("Mean gamete completeness: ", mean(completeness_gam, na.rm=TRUE)))
-
-
-#### add in switch error rate and longest heterozygote stretch functions
+message(paste0("Mean gamete LHS: ", mean(lhs_gam, na.rm=TRUE)))
+message(paste0("Mean gamete SER: ", mean(ser_gam, na.rm=TRUE)))
 #### bedr --> foverlap
 
 
