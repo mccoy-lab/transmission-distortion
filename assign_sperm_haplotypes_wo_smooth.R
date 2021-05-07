@@ -58,6 +58,7 @@ dt <- dt[dt$positions %in% in_union$.,]
 positions <- dt[, 1]
 dt <- dt[, -1]
 
+
 getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
   ux <- unique(na.omit(x))
   tx <- tabulate(match(x, ux))
@@ -117,9 +118,9 @@ reconstruct_hap <- function(input_dt, input_positions, window_indices) {
   h1_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h1_sperm],
                                     invertBits(input_dt[window_start:window_end, h2_sperm])),
                               1, function(x) getmode(x)))
-  h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_sperm],
-                                    invertBits(input_dt[window_start:window_end, h1_sperm])),
-                              1, function(x) getmode(x)))
+  # h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_sperm],
+  #                                   invertBits(input_dt[window_start:window_end, h1_sperm])),
+  #                             1, function(x) getmode(x)))
   return(tibble(index = window_indices, pos = positions_for_window, h1 = h1_inferred))
 }
 
@@ -240,20 +241,15 @@ filled_sperm <- as_tibble(do.call(cbind,
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(dt)
 
-unsmooth <- function(original_gamete_df, filled_gamete_data) {
-  original_dt <- original_gamete_df %>% 
-    mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
-    mutate_all(funs(str_replace(., "h2", "haplotype2")))
-  original_dt <- as.data.frame(original_dt)
+unsmooth <- function(original_gamete_df, filled_gamete_data){
+  original_gamete_df[original_gamete_df == "h1"] <- "haplotype1"
+  original_gamete_df[original_gamete_df == "h2"] <- "haplotype2"
+  original_dt <- as.data.frame(original_gamete_df)
   filled_gamete_data <- as.data.frame(filled_gamete_data)
   filled_gamete_data[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
   filled_gamete_data <- as_tibble(filled_gamete_data)
   return (filled_gamete_data)
 }
-
-#potentially use this instead of mutate_all
-#  dt[dt == "haplotype1"] <- "h1"
-#  dt[dt == "haplotype2"] <- "h2"
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
