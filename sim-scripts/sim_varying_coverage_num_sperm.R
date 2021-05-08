@@ -5,20 +5,56 @@ library(stringr)
 library(pbapply)
 library(pbmcapply)
 library(HMM)
-#library(ggplot2)
+library(ggplot2)
+
+# args <- commandArgs(trailingOnly = TRUE)
+# sampleName <- "sim3"
+# chrom <- "chrT"
+# outdir <- args[1]
+# threads <- 8
+# seqError <- 0.05
+# hapProb <- 1 - seqError
+# hmm_avg_recomb <- 1
+# num_gametes <- as.integer(args[2])
+# num_snps <- as.integer(args[3])
+# coverage <- as.numeric(args[4])
+# message(paste0("The coverage of this simulation is: ", coverage))
+# num_genotypes <- num_gametes * num_snps
+# missing_genotype_rate <- dpois(0, coverage)
+# message(paste0("The missing genotype rate of this simulation is ", missing_genotype_rate))
+# num_nas <- floor(num_genotypes * missing_genotype_rate)
+# window_length <- 3000
+# overlap_denom <- 2
+# random_seed <- as.integer(args[5])
+# set.seed(random_seed)
+# recomb_lambda <- 1
+# stopifnot(recomb_lambda > 0)
+# num_recomb_sites <- rpois(num_gametes, recomb_lambda)
+# message(paste0("Total number of recombination spots across gametes: ", sum(num_recomb_sites)))
+# add_seq_error <- TRUE
+# seqError_add <- 0.05
+# add_de_novo_mut <- TRUE
+# de_novo_lambda <- 5
+# de_novo_alpha <- 7.5
+# de_novo_beta <- 10
+# stopifnot(de_novo_beta > 0)
+# smooth_imputed_genotypes <- FALSE
+# smooth_crossovers <- TRUE
+# write_out_plot <- FALSE
+
 
 ###Argument inputs manual
-sampleName <- "sim_test"
+sampleName <- "simTest"
 chrom <- "chrT"
 stopifnot(grepl("chr", chrom, fixed=TRUE))
 outdir <- "~/tmp/"
 threads <- 2L
-seqError <- 0.05
+seqError <- 0.005
 hapProb <- 1 - seqError
 hmm_avg_recomb <- 1
 num_gametes <- 1000
-num_snps <- 30000
-coverage <- 0.01
+num_snps <- 5000
+coverage <- 0.1
 message(paste0("The coverage of this simulation is: ", coverage))
 num_genotypes <- num_gametes * num_snps
 missing_genotype_rate <- dpois(0, coverage)
@@ -33,8 +69,8 @@ stopifnot(recomb_lambda > 0)
 num_recomb_sites <- rpois(num_gametes, recomb_lambda)
 message(paste0("Total number of recombination spots across gametes: ", sum(num_recomb_sites)))
 add_seq_error <- TRUE
-seqError_add < 0.05
-add_de_novo_mut <- TRUE
+seqError_add <- 0.005
+add_de_novo_mut <- FALSE
 de_novo_lambda <- 5
 de_novo_alpha <- 7.5
 de_novo_beta <- 10
@@ -85,7 +121,7 @@ write_out_plot <- FALSE
 ####Alternative means to input coverage
 ##missing_genotype_rate <- as.numeric(args[8])
 ##if (missing_genotype_rate > 1){ #if entered as a percentage
-  ##missing_genotype_rate <- missing_genotype_rate / 100
+##missing_genotype_rate <- missing_genotype_rate / 100
 ##}
 ##coverage <- -log(missing_genotype_rate)
 ####
@@ -117,10 +153,10 @@ generate_gam <- function(parental_haplotypes, n_crossovers){
     return(list(NA, init_hap, rep(init_hap_index, length(init_hap))))
   } else {
     n_snps <- length(init_hap)
-    crossover_indices <- sample(1:n_snps, n_crossovers)
+    crossover_indices <- sample(2:(n_snps-1), n_crossovers) #limiting it so that crossover locations can't be at the beginning or end to avoid the edge effect
     crossover_indices <- crossover_indices[order(crossover_indices)]
     recombined_hap <- init_hap
-    recombined_hap_index <- rep(init_hap_index-1, n_snps) #recode 1's to 0's or 2's to 1's and store the initial haplotype at all SNP locations 
+    recombined_hap_index <- rep(init_hap_index-1, n_snps) #recode 1's to 0's or 2's to 1's and store the initial haplotype at all SNP locations
     for (crossover in crossover_indices) { #switch haplotypes at some (unknown) location/exchange point between the indices crossover-1 and crossover
       recombined_hap <- c(recombined_hap[1:(crossover-1)], abs(1- recombined_hap[crossover:n_snps]))
       recombined_hap_index <- c(recombined_hap_index[1:(crossover-1)], abs(recombined_hap_index[crossover:n_snps]-1))
@@ -197,8 +233,8 @@ td_test_truth <- function(gam_matrix, row_index) {
 }
 
 df_counts_pvals_truth <- do.call(rbind, pbmclapply(1:nrow(gam_haps),
-                                             function(x) td_test_truth(gam_haps, x),
-                                             mc.cores=getOption("mc.cores", threads))) %>%
+                                                   function(x) td_test_truth(gam_haps, x),
+                                                   mc.cores=getOption("mc.cores", threads))) %>%
   as_tibble() %>%
   add_column(1:nrow(gam_haps)) #bind the positions vector to df_counts_pvals
 colnames(df_counts_pvals_truth) <- c("pval", "h1_count", "h2_count", "genomic_position")
@@ -243,7 +279,7 @@ if (write_out_plot){
   filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim_truth_filtered.csv")
   write_csv(df_counts_pvals_truth[keep_bool,], filename_df)
 }
-  
+
 ##Remove the first column (positions)
 positions <- gam_na_df[, 1]
 gam_na_df <- gam_na_df[,-1]
@@ -307,9 +343,9 @@ reconstruct_hap <- function(input_dt, input_positions, window_indices) {
   h1_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h1_gam],
                                     invertBits(input_dt[window_start:window_end, h2_gam])),
                               1, function(x) getmode(x)))
-  h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_gam],
-                                    invertBits(input_dt[window_start:window_end, h1_gam])),
-                              1, function(x) getmode(x)))
+  # h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_gam],
+  #                                   invertBits(input_dt[window_start:window_end, h1_gam])),
+  #                             1, function(x) getmode(x)))
   return(tibble(index = window_indices, pos = positions_for_window, h1 = h1_inferred))
 }
 
@@ -328,7 +364,8 @@ for (hap_window in 1:length(windows)) {
   if (mean_concordance < 0.1) {
     olap_haps_complete$h1.y <- invertBits(olap_haps_complete$h1.y)
   } else if (mean_concordance < 0.9) {
-    stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance, " Window: ", hap_window))
+    message(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance, " Window: ", hap_window, "But continuing"))
+    #stop(paste0("Haplotypes within overlapping windows are too discordant to merge. Mean: ", mean_concordance, " Window: ", hap_window))
   }
   initial_haplotype <- tibble(index = olap_haps_complete$index,
                               pos = c(olap_haps_complete[is.na(olap_haps_complete$pos.y),]$pos.x,
@@ -443,8 +480,8 @@ runHMM <- function(gam_dt, column_index) {
 }
 
 imputed_gam <- as_tibble(do.call(cbind, pbmclapply(1:ncol(gam_na_df),
-                                                     function(x) runHMM(gam_na_df, x),
-                                                     mc.cores = getOption("mc.cores", threads))))
+                                                   function(x) runHMM(gam_na_df, x),
+                                                   mc.cores = getOption("mc.cores", threads))))
 colnames(imputed_gam) <- colnames(gam_na_df)
 
 # fill up and down at the end
@@ -472,8 +509,8 @@ fill_NAs <- function(merged_gam, col_index) {
 }
 
 filled_gam <- as_tibble(do.call(cbind,
-                                  pblapply(1:ncol(imputed_gam),
-                                           function(x) fill_NAs(imputed_gam, x))))
+                                pblapply(1:ncol(imputed_gam),
+                                         function(x) fill_NAs(imputed_gam, x))))
 colnames(filled_gam) <- colnames(gam_na_df)
 
 unsmooth <- function(original_gamete_df, filled_gamete_data){
@@ -552,108 +589,137 @@ lhs_gam <- do.call(rbind, lapply(1:num_gametes,function(x) lhs(gam_full_df[,-1][
 ser_gam <- do.call(rbind, lapply(1:num_gametes,function(x) ser(gam_full_df[,-1][,x], filled_gam_recode[,x], num_snps)))
 
 message(paste0("Mean gamete haplotype reconstruction accuracy: ", mean(accuracy_gam, na.rm=TRUE)))
+message(paste0("Stdev gamete haplotype reconstruction accuracy: ", sd(accuracy_gam, na.rm=TRUE)))
 message(paste0("Mean gamete completeness: ", mean(completeness_gam, na.rm=TRUE)))
+message(paste0("Stdev gamete completeness: ", sd(completeness_gam, na.rm=TRUE)))
 message(paste0("Mean gamete LHS: ", mean(lhs_gam, na.rm=TRUE)))
+message(paste0("Stdev gamete LHS: ", sd(lhs_gam, na.rm=TRUE)))
 message(paste0("Mean gamete SER: ", mean(ser_gam, na.rm=TRUE)))
+message(paste0("Stdev gamete SER: ", sd(ser_gam, na.rm=TRUE)))
+
+
 #### bedr --> foverlap
 
+if (write_out_plot){
+  filename = paste0(outDir, "simulated_gam_hap_reconstruction.pdf")
+  pdf(file=filename)
+  ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="gam Haplotype Reconstruction") + scale_y_continuous(name="accuracy", breaks=c(98.75, 99, 99.25, 99.5, 99.75, 100), labels=c(98.75, 99, 99.25, 99.5, 99.75, 100), limits=c(98.75, 100))
+  dev.off()
+}
+
+td_test <- function(gam_matrix, row_index) {
+  test_row <- gam_matrix[row_index,]
+  gt_vector <- unlist(test_row)[-1]
+  one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
+  two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
+  p_value <- binom.test(c(one_count, two_count))$p.value
+  return(c(p_value, one_count, two_count))
+}
+
+df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_gam),
+                                            function(x) td_test(filled_gam, x),
+                                            mc.cores=getOption("mc.cores", threads))) %>%
+ as_tibble() %>%
+ add_column(positions) #bind the positions vector to df_counts_pvals
+colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
+if (write_out_plot){
+  filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim.csv")
+  write_csv(df_counts_pvals, filename_df)
+}
+
+idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_gam))
+recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_gam),
+                                              function(x) find_recomb_spots(filled_gam, x, idents_for_csv, positions),
+                                              mc.cores=getOption("mc.cores", threads))) %>%
+  right_join(., tibble(Ident = idents_for_csv), by = "Ident")
+
+metrics <- function(tp, fp, tn, fn){
+    precision <- tp/(tp+fp)
+    recall <- tp/(tp+fn)
+    accuracy <- (tp + tn)/(tp + tn + fp + fn)
+    f1 <- (2*precision*recall)/(precision + recall)
+    specificity <- tn/(tn+fp)
+    fdr <- fp/(tp+fp)
+    fpr <- fp/(tn+fp)
+    metric_list <- list(precision=precision,
+                        recall=recall,
+                        accuracy=accuracy,
+                        specificity = specificity,
+                        fdr = fdr,
+                        fpr = fpr,
+                        f1=f1)
+    return (metric_list) }
+
+names(crossover_indices) <- paste0(rep("gam", num_gametes), 1:num_gametes, "_")
+unlist_ci <- unlist(crossover_indices, use.names=TRUE)
+tci_dt <- data.table(gam=str_split(names(unlist_ci), "_", simplify=TRUE)[,1], start =(unlist_ci-1), end=(unlist_ci))
+tci_dt_nona <- tci_dt[!is.na(tci_dt$start),] %>% setkey()
+tci_dt_na <- tci_dt[is.na(tci_dt$start),]
 
 
+pci_dt <- data.table(gam=str_split(recomb_spots_all$Ident, "_", simplify=TRUE)[,3], start=recomb_spots_all$Genomic_start, end=recomb_spots_all$Genomic_end)
+pci_dt_nona <- pci_dt[!is.na(pci_dt$start),] %>% setkey()
+pci_dt_na <- pci_dt[is.na(pci_dt$start),]
 
-# if (write_out_plot){
-#   filename = paste0(outDir, "simulated_gam_hap_reconstruction.pdf")
-#   pdf(file=filename)
-#   ggplot(accuracyDat, aes(x=name, y=val, fill=name)) + scale_x_discrete(limits=c("Raw", "Corrected")) + geom_violin(scale="width", adjust=1, width=0.5) + labs(y="accuracy", x="method", title="gam Haplotype Reconstruction") + scale_y_continuous(name="accuracy", breaks=c(98.75, 99, 99.25, 99.5, 99.75, 100), labels=c(98.75, 99, 99.25, 99.5, 99.75, 100), limits=c(98.75, 100))
-#   dev.off()
-# }
-# 
-# td_test <- function(gam_matrix, row_index) {
-#   test_row <- gam_matrix[row_index,]
-#   gt_vector <- unlist(test_row)[-1]
-#   one_count <- sum(gt_vector == "haplotype1", na.rm = TRUE)
-#   two_count <- sum(gt_vector == "haplotype2", na.rm = TRUE)
-#   p_value <- binom.test(c(one_count, two_count))$p.value
-#   return(c(p_value, one_count, two_count))
-# }
-# 
-# df_counts_pvals <- do.call(rbind, pbmclapply(1:nrow(filled_gam),
-#                                             function(x) td_test(filled_gam, x),
-#                                             mc.cores=getOption("mc.cores", threads))) %>%
-#  as_tibble() %>%
-#  add_column(positions) #bind the positions vector to df_counts_pvals
-# colnames(df_counts_pvals) <- c("pval", "h1_count", "h2_count", "genomic_position")
-# if (write_out_plot){
-#   filename_df <- paste0(outDir, sampleName, "_", chrom, "_pval_sim.csv")
-#   write_csv(df_counts_pvals, filename_df)
-# }
-# 
-# 
-# 
-# idents_for_csv <- paste0(paste0(sampleName, "_", chrom, "_"), colnames(filled_gam))
-# recomb_spots_all <- do.call(rbind, pbmclapply(1:ncol(filled_gam),
-#                                               function(x) find_recomb_spots(filled_gam, x, idents_for_csv, positions),
-#                                               mc.cores=getOption("mc.cores", threads))) %>%
-#   right_join(., tibble(Ident = idents_for_csv), by = "Ident")
-# 
-# ###Prepare a truth dataframe for the true crossover locations that is bedr compatible
-# ##Note bedr has to have different start and end values and cannot handle NAs
-# canrun_bedr <- TRUE
-# no_truths <- FALSE
-# no_preds <- FALSE
-# 
-# names(crossover_indices) <- paste0(rep("gam", num_gametes), 1:num_gametes, "_")
-# unlist_ci <- unlist(crossover_indices, use.names=TRUE) #just a list with a single row for each crossover, rowname corresponds to the gam _1, _2, etc for gam with more than one CO
-# ci_df <- data.frame(chr=rep(as.character(chrom), length(unlist_ci)), start=(unlist_ci-1), end=(unlist_ci))
-# row.names(ci_df) <- names(unlist_ci)
-# truth_onlyna_df <- ci_df[is.na(ci_df$start),] #this one is to check all the gametes that don't have any true recombination spots
-# if (nrow(drop_na(ci_df)) >=1 ){
-#   truth_nona_df_sort <- bedr.sort.region(drop_na(ci_df))
-#   truth_nona_df_sort <- add_column(truth_nona_df_sort, "gametes" = row.names(truth_nona_df_sort),  "gametes_simp"=gsub("_.*", "", row.names(truth_nona_df_sort)))  #these are the true recombination spots, valid regions with no NAs, lexicographically sorted
-# } else {
-#   canrun_bedr <- FALSE
-#   no_truths <- TRUE
-# }
-# 
-# ###Prepare a prediction  dataframe for the predicted crossover locations that is bedr compatible
-# split_idents <- str_split(recomb_spots_all$Ident, "_", simplify=TRUE)
-# recomb_spots_df <- data.frame(chr=as.character(split_idents[,2]), start=recomb_spots_all$Genomic_start, end=recomb_spots_all$Genomic_end)
-# row.names(recomb_spots_df) <- make.names(paste0(split_idents[,3], "_"), unique=TRUE)
-# pred_onlyna_df <- recomb_spots_df[is.na(recomb_spots_df$start),] #this one is to check all the gametes that don't have any predicted recombination spots
-# #might need to add a check to make sure these are greater than 0 rows
-# 
-# if (nrow(drop_na(recomb_spots_df)) >= 1) {
-#   pred_nona_df_sort <- bedr.sort.region(drop_na(recomb_spots_df))
-#   pred_nona_df_sort <- add_column(pred_nona_df_sort, "gametes"= row.names(pred_nona_df_sort),  "gametes_simp"=gsub("_.*", "", row.names(pred_nona_df_sort)))#these are the predicted recombination spots, valid regions with no NAs, lexicographically sorted
-# } else {
-#   canrun_bedr <- FALSE
-#   no_preds <- TRUE
-# }
-# 
-# if (canrun_bedr) {
-#   truth_pred_int <- bedr(input = list(a=truth_nona_df_sort, b=pred_nona_df_sort), 
-#                          method = "intersect",
-#                          params = "-loj -sorted") #those that aren't overlapping will be reported as NULL for b (. -1 -1). Those are fn
-#   colnames(truth_pred_int) <- c("truth_chr", "truth_start", "truth_end", "truth_gametes", "truth_gametes_simp", "pred_chr", "pred_start", "pred_end", "pred_gametes",  "pred_gametes_simp")
-#   truth_pred_int_nona <- truth_pred_int[!truth_pred_int$pred_chr == ".",]
-#   rows_to_keep  <- which(truth_pred_int_nona$truth_gametes_simp == truth_pred_int_nona$pred_gametes_simp)
-#   truth_pred_int_nona  <- truth_pred_int_nona[rows_to_keep, ]
-#   
-#   fn_pt1 <- nrow(truth_pred_int[truth_pred_int$pred_chr == ".",]) #false negative because there is no overlapping predicted recombination for a true recombination spot, accomplished by finding the number of locations that are null in prediction column when truth intersected with prediction
-#   fn_pt2 <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df))) #predicted returns only NA when there is at least one truth rownames in the prediction but not in the truth
-#   
-#   tp_cons <- length(unique(paste0(truth_pred_int_nona$pred_chr, "_", truth_pred_int_nona$pred_start, "_", truth_pred_int_nona$pred_end))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by the length of the unique prediction identities from the non NA intersection
-#   tp_lib <- nrow(truth_pred_int_nona) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction. accomplish this by counting number of truths that intersect any prediction from the non NA intersection
-#   
-#   pred_truth_int <- bedr(input = list(a=pred_nona_df_sort, b=truth_nona_df_sort),
-#                          method = "intersect",
-#                          params = "-loj -sorted")
-#   colnames(pred_truth_int) <- c("pred_chr", "pred_start", "pred_end",  "pred_gametes",  "pred_gametes_simp", "truth_chr", "truth_start", "truth_end", "truth_gametes", "truth_gametes_simp")
-#   fp <- nrow(pred_truth_int[pred_truth_int$truth_chr == ".",]) #number predicted as recombination spots, but don't intersect with truth at all
-#   
-#   fn_lib <- fn_pt1 + fn_pt2
-#   fn_cons <- fn_pt1 + fn_pt2 + (tp_lib - nrow(truth_pred_int_nona)) #include overflow intersections, or when multiple truths intersect a single prediction 
-#   
-#   tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
+if (nrow(tci_dt_nona) > 0 & nrow(pci_dt_nona) > 0){ #truths and predictions
+  #no_truths <- FALSE
+  #no_preds <- FALSE
+  tci_intersect <- foverlaps(tci_dt_nona, pci_dt_nona) %>%  `colnames<-` (c("gam", "Predicted_Start", "Predicted_End", "True_Start", "True_End"))
+  
+  tp_lib <- nrow(tci_intersect[!is.na(tci_intersect$Predicted_Start),]) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction. accomplish this by counting number of truths that intersect any prediction from the non NA intersection
+  tp_cons <- tp_lib - sum(duplicated(paste0(tci_intersect[!is.na(tci_intersect$Predicted_Start),]$gam, "_", tci_intersect[!is.na(tci_intersect$Predicted_Start),]$True_Start, "_", tci_intersect[!is.na(tci_intersect$Predicted_Start),]$True_End))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by subtracting the sum of the boolean reporting which items are duplicated in the truth identities from the non NA intersection; note duplicated() only returns TRUE for the 2nd, 3rd, 4th, etc occurrences, not the 1st
+  
+  fn_pt1 <- nrow(tci_intersect[is.na(tci_intersect$Predicted_Start),]) #false negative because there is no overlapping predicted recombination for a true recombination spot, accomplished by finding the number of locations that are null in prediction column when truth intersected with prediction
+  fn_pt2 <- length(setdiff(pci_dt_na$gam, tci_dt_na$gam)) #predicted returns only NA when there is at least one truth gamete in the prediction but not in the truth
+  tn <- nrow(merge(tci_dt_na, pci_dt_na, by="gam")) #predicted and truth both return no crossovers for a given gamete
+  fn_pt3 <- tp_lib - tp_cons #include overflow intersections, or when multiple truths intersect a single prediction 
+  fn_lib <- fn_pt1 + fn_pt2
+  fn_cons <- fn_pt1 + fn_pt2 + fn_pt3
+  
+  ####What would this fit as??? Does it equal fp?
+  filler_variable <- length(setdiff(tci_dt_na$gam, pci_dt_na$gam)) #____ truth returns only NA or no crossovers for a given gamete when there is at least one prediction for that same gamete
+  #######
+  
+  pci_intersect <- foverlaps(pci_dt_nona, tci_dt_nona) %>%  `colnames<-` (c("gam", "True_Start", "True_End", "Predicted_Start", "Predicted_End"))
+  
+  fp <- nrow(pci_intersect[is.na(pci_intersect$True_Start),]) #number predicted as recombination spots, but don't intersect with truth at all
+  
+  
+  
+} else if (nrow(tci_dt_nona) == 0 & nrow(pci_dt_nona) > 0){ #no truths, but some predictions; i.e. no non-na truths, but there are non-na predictions, all are false positives
+  #no_truths <- TRUE
+  #no_preds <- FALSE
+  fp <- nrow(pci_dt_nona)
+  fn <- length(setdiff(pci_dt_na$gam, tci_dt_na$gam)) #only predicted returns no crossovers for a given gamete, when truth does not returnn no crossovers for the same gamete
+  tp <- 0
+  tn <- nrow(merge(tci_dt_na, pci_dt_na, by="gam")) #predicted and truth both return no crossovers for a given gamete
+} else if (nrow(pci_dt_nona) == 0 & nrow(tci_dt_nona) >0){ #no predictions, but some truths, i.e. no non-na predictions but there are non-na truths, all are false negatives
+  #no_preds <- TRUE
+  #no_truths <- FALSE
+  fn <- nrow(tci_dt_nona)
+  fp <- 0
+  tn <- nrow(merge(tci_dt_na, pci_dt_na, by="gam")) #predicted and truth both return no crossovers for a given gamete
+  tp <- 0
+} else {
+  no_truths <- TRUE
+  no_preds <- TRUE
+  message("no recombination metrics possible because there were no truths or predictions")
+  message(paste0("Conservative recombination spot identification metrics\nPrecision: ", NA,
+                                  "\nRecall: ", NA,
+                                  "\nAccuracy: ", NA,
+                                  "\nF1: ", NA,
+                                  "\nSpecificity: ", NA,
+                                  "\nFDR: ", NA,
+                                  "\nFPR: ", NA))
+                   message(paste0("Liberal recombination spot identification metrics\nPrecision: ", NA,
+                                  "\nRecall: ", NA,
+                                  "\nAccuracy: ", NA,
+                                  "\nF1: ", NA,
+                                  "\nSpecificity: ", NA,
+                                  "\nFDR: ", NA,
+                                  "\nFPR: ", NA))
+}
+  
 # } else {
 #   if (no_truths & !no_preds){ #no non-na truths, but there are non-na predictions, all are false positives
 #     fp <- nrow(pred_nona_df_sort)
@@ -670,24 +736,7 @@ message(paste0("Mean gamete SER: ", mean(ser_gam, na.rm=TRUE)))
 #   
 # }
 # 
-# 
-# metrics <- function(tp, fp, tn, fn){
-#   precision <- tp/(tp+fp)
-#   recall <- tp/(tp+fn)
-#   accuracy <- (tp + tn)/(tp + tn + fp + fn)
-#   f1 <- (2*precision*recall)/(precision + recall)
-#   specificity <- tn/(tn+fp)
-#   fdr <- fp/(tp+fp)
-#   fpr <- fp/(tn+fp)
-#   metric_list <- list(precision=precision, 
-#                       recall=recall, 
-#                       accuracy=accuracy, 
-#                       specificity = specificity,
-#                       fdr = fdr,
-#                       fpr = fpr,
-#                       f1=f1)
-#   return (metric_list) }
-# 
+
 # if (no_truths & no_preds){
 #   message("no recombination metrics possible because there were no truths or predictions")
 # } else if (no_truths | no_preds){
