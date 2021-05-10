@@ -650,59 +650,113 @@ metrics <- function(tp, fp, tn, fn){
                         f1=f1)
     return (metric_list) }
 
+find_tp <- function(truth_intersect_dt, cons=FALSE){
+  tp <- nrow(truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction; accomplish this by counting number of truths that intersect any prediction from the non NA intersection
+  if (cons){
+    tp <- tp - sum(duplicated(paste0(truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]$gam, "_", truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]$Predicted_Start, "_", truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]$Predicted_End))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by subtracting the sum of the boolean reporting which items are duplicated in the prediction identities from the non NA intersection; note duplicated() only returns TRUE for the 2nd, 3rd, 4th, etc occurrences, not the 1st
+  }
+  return (tp)
+}
+
+find_tn <- function(truth_dt_na, pred_dt_na){
+  tn <- nrow(merge(truth_dt_na, pred_dt_na, by="gam")) #both truth and predicted return NA for a given gamete meaning they both agree that gamete has no recombiantion events
+  return (tn)
+}
+
+find_fp <- function(pred_intersect_dt){
+  fp <- nrow(pred_intersect_dt[is.na(pred_intersect_dt$True_Start),]) #number predicted as recombination spots, but don't intersect with truth at all
+  return (fp)
+}
+
+find_fn <- function(truth_intersect_dt, cons=FALSE){
+  fn <- nrow(truth_intersect_dt[is.na(truth_intersect_dt$Predicted_Start),]) #number of true recombinantion spots that don't interesect any predictions
+  if (cons){
+    fn <- fn + sum(duplicated(paste0(truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]$gam, "_", truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]$Predicted_Start, "_", truth_intersect_dt[!is.na(truth_intersect_dt$Predicted_Start),]$Predicted_End))) #count the overflows when multiple truths intersect a single predicted
+  }
+  return (fn)
+}
+
 names(crossover_indices) <- paste0(rep("gam", num_gametes), 1:num_gametes, "_")
 unlist_ci <- unlist(crossover_indices, use.names=TRUE)
 tci_dt <- data.table(gam=str_split(names(unlist_ci), "_", simplify=TRUE)[,1], start =(unlist_ci-1), end=(unlist_ci))
 tci_dt_nona <- tci_dt[!is.na(tci_dt$start),] %>% setkey()
 tci_dt_na <- tci_dt[is.na(tci_dt$start),]
 
-
 pci_dt <- data.table(gam=str_split(recomb_spots_all$Ident, "_", simplify=TRUE)[,3], start=recomb_spots_all$Genomic_start, end=recomb_spots_all$Genomic_end)
 pci_dt_nona <- pci_dt[!is.na(pci_dt$start),] %>% setkey()
 pci_dt_na <- pci_dt[is.na(pci_dt$start),]
 
 if (nrow(tci_dt_nona) > 0 & nrow(pci_dt_nona) > 0){ #truths and predictions
-  #no_truths <- FALSE
-  #no_preds <- FALSE
   tci_intersect <- foverlaps(tci_dt_nona, pci_dt_nona) %>%  `colnames<-` (c("gam", "Predicted_Start", "Predicted_End", "True_Start", "True_End"))
-  
-  tp_lib <- nrow(tci_intersect[!is.na(tci_intersect$Predicted_Start),]) #want to count +1 for every truth that intersects a prediction, even if multiple truths intersect a single prediction. accomplish this by counting number of truths that intersect any prediction from the non NA intersection
-  tp_cons <- tp_lib - sum(duplicated(paste0(tci_intersect[!is.na(tci_intersect$Predicted_Start),]$gam, "_", tci_intersect[!is.na(tci_intersect$Predicted_Start),]$True_Start, "_", tci_intersect[!is.na(tci_intersect$Predicted_Start),]$True_End))) #want to count only one truth when multiple truths intersect a single prediction; accomplish this by subtracting the sum of the boolean reporting which items are duplicated in the truth identities from the non NA intersection; note duplicated() only returns TRUE for the 2nd, 3rd, 4th, etc occurrences, not the 1st
-  
-  fn_pt1 <- nrow(tci_intersect[is.na(tci_intersect$Predicted_Start),]) #false negative because there is no overlapping predicted recombination for a true recombination spot, accomplished by finding the number of locations that are null in prediction column when truth intersected with prediction
-  fn_pt2 <- length(setdiff(pci_dt_na$gam, tci_dt_na$gam)) #predicted returns only NA when there is at least one truth gamete in the prediction but not in the truth
-  tn <- nrow(merge(tci_dt_na, pci_dt_na, by="gam")) #predicted and truth both return no crossovers for a given gamete
-  fn_pt3 <- tp_lib - tp_cons #include overflow intersections, or when multiple truths intersect a single prediction 
-  fn_lib <- fn_pt1 + fn_pt2
-  fn_cons <- fn_pt1 + fn_pt2 + fn_pt3
-  
-  ####What would this fit as??? Does it equal fp?
-  filler_variable <- length(setdiff(tci_dt_na$gam, pci_dt_na$gam)) #____ truth returns only NA or no crossovers for a given gamete when there is at least one prediction for that same gamete
-  #######
-  
   pci_intersect <- foverlaps(pci_dt_nona, tci_dt_nona) %>%  `colnames<-` (c("gam", "True_Start", "True_End", "Predicted_Start", "Predicted_End"))
   
-  fp <- nrow(pci_intersect[is.na(pci_intersect$True_Start),]) #number predicted as recombination spots, but don't intersect with truth at all
+  tp_lib <- find_tp(tci_intersect)
+  tp_cons <- find_tp(tci_intersect, cons = TRUE)
+  fn_lib <- find_fn(tci_intersect)
+  fn_cons <- find_fn(tci_intersect, cons = TRUE)
+  tn <- find_tn(tci_dt_na, pci_dt_na)
+  fp <- find_fp(pci_intersect)
   
-  
+  metrics_cons <- metrics(tp_cons, fp, tn, fn_cons)
+  message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_cons$precision,
+                 "\nRecall: ", metrics_cons$recall,
+                 "\nAccuracy: ", metrics_cons$accuracy,
+                 "\nF1: ", metrics_cons$f1,
+                 "\nSpecificity: ", metrics_cons$specificity,
+                 "\nFDR: ", metrics_cons$fdr,
+                 "\nFPR: ", metrics_cons$fpr))
+  metrics_lib <- metrics(tp_lib, fp, tn, fn_lib)
+  message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_lib$precision,
+                 "\nRecall: ", metrics_lib$recall,
+                 "\nAccuracy: ", metrics_lib$accuracy,
+                 "\nF1: ", metrics_lib$f1,
+                 "\nSpecificity: ", metrics_lib$specificity,
+                 "\nFDR: ", metrics_lib$fdr,
+                 "\nFPR: ", metrics_lib$fpr))
   
 } else if (nrow(tci_dt_nona) == 0 & nrow(pci_dt_nona) > 0){ #no truths, but some predictions; i.e. no non-na truths, but there are non-na predictions, all are false positives
-  #no_truths <- TRUE
-  #no_preds <- FALSE
   fp <- nrow(pci_dt_nona)
-  fn <- length(setdiff(pci_dt_na$gam, tci_dt_na$gam)) #only predicted returns no crossovers for a given gamete, when truth does not returnn no crossovers for the same gamete
+  fn <- 0
   tp <- 0
   tn <- nrow(merge(tci_dt_na, pci_dt_na, by="gam")) #predicted and truth both return no crossovers for a given gamete
+  message(paste0("recombination metrics match for liberal and conservative because no truths"))
+  metrics_it <- metrics(tp, fp, tn, fn)
+  message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_it$precision,
+                 "\nRecall: ", NA, #metrics_it$recall,
+                 "\nAccuracy: ", metrics_it$accuracy,
+                 "\nF1: ", NA, #metrics_it$f1,
+                 "\nSpecificity: ", metrics_it$specificity,
+                 "\nFDR: ", metrics_it$fdr,
+                 "\nFPR: ", metrics_it$fpr))
+  message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_it$precision,
+                 "\nRecall: ", NA, #metrics_it$recall,
+                 "\nAccuracy: ", metrics_it$accuracy,
+                 "\nF1: ", NA, #metrics_it$f1,
+                 "\nSpecificity: ", metrics_it$specificity,
+                 "\nFDR: ", metrics_it$fdr,
+                 "\nFPR: ", metrics_it$fpr))
 } else if (nrow(pci_dt_nona) == 0 & nrow(tci_dt_nona) >0){ #no predictions, but some truths, i.e. no non-na predictions but there are non-na truths, all are false negatives
-  #no_preds <- TRUE
-  #no_truths <- FALSE
   fn <- nrow(tci_dt_nona)
   fp <- 0
   tn <- nrow(merge(tci_dt_na, pci_dt_na, by="gam")) #predicted and truth both return no crossovers for a given gamete
   tp <- 0
+  message(paste0("recombination metrics match for liberal and conservative because no predictions"))
+  metrics_it <- metrics(tp, fp, tn, fn)
+  message(paste0("Conservative recombination spot identification metrics\nPrecision: ", NA, #metrics_it$precision,
+                 "\nRecall: ", metrics_it$recall,
+                 "\nAccuracy: ", metrics_it$accuracy,
+                 "\nF1: ", NA, #metrics_it$f1,
+                 "\nSpecificity: ", metrics_it$specificity,
+                 "\nFDR: ", NA, #metrics_it$fdr,
+                 "\nFPR: ", metrics_it$fpr))
+  message(paste0("Liberal recombination spot identification metrics\nPrecision: ", NA, #metrics_it$precision,
+                 "\nRecall: ", metrics_it$recall,
+                 "\nAccuracy: ", metrics_it$accuracy,
+                 "\nF1: ", NA, #metrics_it$f1,
+                 "\nSpecificity: ", metrics_it$specificity,
+                 "\nFDR: ", NA, #metrics_it$fdr,
+                  "\nFPR: ", metrics_it$fpr))
 } else {
-  no_truths <- TRUE
-  no_preds <- TRUE
   message("no recombination metrics possible because there were no truths or predictions")
   message(paste0("Conservative recombination spot identification metrics\nPrecision: ", NA,
                                   "\nRecall: ", NA,
@@ -719,62 +773,7 @@ if (nrow(tci_dt_nona) > 0 & nrow(pci_dt_nona) > 0){ #truths and predictions
                                   "\nFDR: ", NA,
                                   "\nFPR: ", NA))
 }
-  
-# } else {
-#   if (no_truths & !no_preds){ #no non-na truths, but there are non-na predictions, all are false positives
-#     fp <- nrow(pred_nona_df_sort)
-#     fn <- length(setdiff(row.names(pred_onlyna_df), row.names(truth_onlyna_df)))
-#     tp <- 0
-#     tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
-#   } 
-#   else if (no_preds & !no_truths){ #no non-na predictions but there are non-na truths, all are false negatives
-#     fn <- nrow(truth_nona_df_sort)
-#     fp <- 0
-#     tn <- nrow(merge(truth_onlyna_df, pred_onlyna_df, by=0))
-#     tp <- 0
-#   } 
-#   
-# }
-# 
 
-# if (no_truths & no_preds){
-#   message("no recombination metrics possible because there were no truths or predictions")
-# } else if (no_truths | no_preds){
-#   metrics_it <- metrics(tp, fp, tn, fn)
-#   message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_it$precision,
-#                  "\nRecall: ", metrics_it$recall,
-#                  "\nAccuracy: ", metrics_it$accuracy,
-#                  "\nF1: ", metrics_it$f1,
-#                  "\nSpecificity: ", metrics_it$specificity,
-#                  "\nFDR: ", metrics_it$fdr,
-#                  "\nFPR: ", metrics_it$fpr))
-#   message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_it$precision,
-#                  "\nRecall: ", metrics_it$recall,
-#                  "\nAccuracy: ", metrics_it$accuracy,
-#                  "\nF1: ", metrics_it$f1,
-#                  "\nSpecificity: ", metrics_it$specificity,
-#                  "\nFDR: ", metrics_it$fdr,
-#                  "\nFPR: ", metrics_it$fpr))
-#   
-# } else {
-#   metrics_cons <- metrics(tp_cons, fp, tn, fn_cons)
-#   message(paste0("Conservative recombination spot identification metrics\nPrecision: ", metrics_cons$precision,
-#                  "\nRecall: ", metrics_cons$recall,
-#                  "\nAccuracy: ", metrics_cons$accuracy,
-#                  "\nF1: ", metrics_cons$f1,
-#                  "\nSpecificity: ", metrics_cons$specificity,
-#                  "\nFDR: ", metrics_cons$fdr,
-#                  "\nFPR: ", metrics_cons$fpr))
-#   metrics_lib <- metrics(tp_lib, fp, tn, fn_lib)
-#   message(paste0("Liberal recombination spot identification metrics\nPrecision: ", metrics_lib$precision,
-#                  "\nRecall: ", metrics_lib$recall,
-#                  "\nAccuracy: ", metrics_lib$accuracy,
-#                  "\nF1: ", metrics_lib$f1,
-#                  "\nSpecificity: ", metrics_lib$specificity,
-#                  "\nFDR: ", metrics_lib$fdr,
-#                  "\nFPR: ", metrics_lib$fpr))
-# }
-# 
 # if (write_out_plot){
 #   ###Plot the resolution of predicted recombination break point regions
 #   filename = paste0(outDir, "simulated_recombination_resolution.pdf")
