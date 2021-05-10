@@ -511,8 +511,10 @@ filled_gam <- as_tibble(do.call(cbind,
                                 pblapply(1:ncol(imputed_gam),
                                          function(x) fill_NAs(imputed_gam, x))))
 colnames(filled_gam) <- colnames(gam_na_df)
-filename_fs <- paste0(outDir, sampleName, "_", chrom, "_filled_sperm_smoothed.csv")
-write_csv(filled_sperm, filename_fs)
+if (write_out_plot){
+  filename_fs <- paste0(outDir, sampleName, "_", chrom, "_filled_sperm_smoothed.csv")
+  write_csv(filled_sperm, filename_fs)
+}
 
 unsmooth <- function(original_gamete_df, filled_gamete_data){
   original_gamete_df[original_gamete_df == "h1"] <- "haplotype1"
@@ -577,8 +579,10 @@ re_recode_gametes <- function(dt, complete_haplotypes) {
 
 if (!smooth_imputed_genotypes & smooth_crossovers){
   filled_gam <- unsmooth(gam_na_df, filled_gam)
-  filename_fs <- paste0(outDir, sampleName, "_", chrom, "_filled_gam_unsmoothed.csv")
-  write_csv(filled_gam, filename_fs)
+  if (write_out_plot){
+    filename_fs <- paste0(outDir, sampleName, "_", chrom, "_filled_gam_unsmoothed.csv")
+    write_csv(filled_gam, filename_fs)
+  }
   filled_gam_recode <- re_recode_gametes(filled_gam, complete_haplotypes)
 } else if(!smooth_imputed_genotypes & !smooth_crossovers){
   filled_gam_recode <- re_recode_gametes(filled_gam_recomb, complete_haplotypes)
@@ -599,9 +603,6 @@ message(paste0("Mean gamete LHS: ", mean(lhs_gam, na.rm=TRUE)))
 message(paste0("Stdev gamete LHS: ", sd(lhs_gam, na.rm=TRUE)))
 message(paste0("Mean gamete SER: ", mean(ser_gam, na.rm=TRUE)))
 message(paste0("Stdev gamete SER: ", sd(ser_gam, na.rm=TRUE)))
-
-
-#### bedr --> foverlap
 
 if (write_out_plot){
   filename = paste0(outDir, "simulated_gam_hap_reconstruction.pdf")
