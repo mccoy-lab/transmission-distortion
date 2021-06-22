@@ -27,7 +27,7 @@ samtools fixmate -m SRR10140446_aligned_sorted_chr10_namecollated.bam SRR1014044
 samtools sort -@16 -o SRR10140446_aligned_sorted_chr10_fixmate_sorted.bam SRR10140446_aligned_sorted_chr10_fixemate.bam
 
 # Remove duplicates
-samtools markdup -r -@16 SRR10140446_aligned_sorted_chr10_namecollated_sorted.bam SRR10140446_aligned_sorted_chr10_dedup.bam
+samtools markdup -r -@16 SRR10140446_aligned_sorted_chr10_fixmate_sorted.bam SRR10140446_aligned_sorted_chr10_dedup.bam
 # if you don't want to remove the duplicates (but just want them flagged), do not include the -r flag 
 
 # Get depth across chromosome file 
