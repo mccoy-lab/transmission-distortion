@@ -17,6 +17,7 @@ threads <- as.integer(args[7])
 window_length <- 3000
 smooth_imputed_genotypes <- FALSE
 smooth_crossovers <- TRUE
+run_soph_filter <- as.logical(args[8])
 
 dt <- read_delim(input_file, delim = "\t", col_types = cols(.default = "d")) %>% 
   as.data.frame()
@@ -25,16 +26,10 @@ dt <- dt[((rowSums(dt[, 2:ncol(dt)] == 0, na.rm = TRUE) > 0) & (rowSums(dt[, 2:n
 
 # remove the first column (positions)
 positions <- dt[, 1]
-# Read in materials necessary for filtering 
-# First, the encode blacklist; we want to exclude the positions here  
-blacklist <- read_delim(blacklist_file, col_names = FALSE, delim = "\t") %>% 
-  as.data.table()
-colnames(blacklist) <- c("chr", "start", "end")
-# Next, the genome in a bottle (giab); we want to include only the positions here 
-giab_union <- read.table(giab_file, sep = "\t", header = FALSE) %>% as.data.table()
-colnames(giab_union) <- c("chr", "start", "end")
-# do not offer this to the package they can filter their own input data 
+
 '%!in%' <- function(x,y)!('%in%'(x,y))
+
+# do not offer this to the package they can filter their own input data 
 filter_problem_genome <- function(chrom, positions, blacklist, giab_union) {
   col_chr_name <- paste0("chr", chrom)
   new_positions <- positions %>% as.data.table()
@@ -53,10 +48,26 @@ filter_problem_genome <- function(chrom, positions, blacklist, giab_union) {
   in_union <- data.table::foverlaps(pos_not_blacklist, giab_chr, type="any", nomatch=NULL)
   return(in_union)
 }
-in_union <- filter_problem_genome(chrom, positions, blacklist, giab_union)
-dt <- dt[dt$positions %in% in_union$.,]
-positions <- dt[, 1]
+
+if (run_soph_filter){
+  # Read in materials necessary for filtering 
+  # First, the encode blacklist; we want to exclude the positions here
+  blacklist <- read_delim(blacklist_file, col_names = FALSE, delim = "\t") %>% 
+    as.data.table()
+  colnames(blacklist) <- c("chr", "start", "end")
+  # Next, the genome in a bottle (giab); we want to include only the positions here 
+  giab_union <- read.table(giab_file, sep = "\t", header = FALSE) %>% as.data.table()
+  colnames(giab_union) <- c("chr", "start", "end")
+  
+  
+  
+  in_union <- filter_problem_genome(chrom, positions, blacklist, giab_union)
+  dt <- dt[dt$positions %in% in_union$.,]
+  positions <- dt[, 1]
+}
+
 dt <- dt[, -1]
+
 
 getmode <- function(x) { #from https://stackoverflow.com/questions/56552709/r-no-mode-and-exclude-na?noredirect=1#comment99692066_56552709
   ux <- unique(na.omit(x))
@@ -117,9 +128,9 @@ reconstruct_hap <- function(input_dt, input_positions, window_indices) {
   h1_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h1_sperm],
                                     invertBits(input_dt[window_start:window_end, h2_sperm])),
                               1, function(x) getmode(x)))
-  h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_sperm],
-                                    invertBits(input_dt[window_start:window_end, h1_sperm])),
-                              1, function(x) getmode(x)))
+  # h2_inferred <- unname(apply(cbind(input_dt[window_start:window_end, h2_sperm],
+  #                                   invertBits(input_dt[window_start:window_end, h1_sperm])),
+  #                             1, function(x) getmode(x)))
   return(tibble(index = window_indices, pos = positions_for_window, h1 = h1_inferred))
 }
 
@@ -239,21 +250,19 @@ filled_sperm <- as_tibble(do.call(cbind,
                                   pblapply(1:ncol(imputed_sperm),
                                            function(x) fill_NAs(imputed_sperm, x))))
 colnames(filled_sperm) <- colnames(dt)
+filename_fs <- paste0(outDir, sampleName, "_", chrom, "_filled_sperm_smoothed.csv")
+write_csv(filled_sperm, filename_fs)
 
-unsmooth <- function(original_gamete_df, filled_gamete_data) {
-  original_dt <- original_gamete_df %>% 
-    mutate_all(funs(str_replace(., "h1", "haplotype1"))) %>%
-    mutate_all(funs(str_replace(., "h2", "haplotype2")))
-  original_dt <- as.data.frame(original_dt)
+
+unsmooth <- function(original_gamete_df, filled_gamete_data){
+  original_gamete_df[original_gamete_df == "h1"] <- "haplotype1"
+  original_gamete_df[original_gamete_df == "h2"] <- "haplotype2"
+  original_dt <- as.data.frame(original_gamete_df)
   filled_gamete_data <- as.data.frame(filled_gamete_data)
   filled_gamete_data[!is.na(original_dt)] <- original_dt[!is.na(original_dt)]
   filled_gamete_data <- as_tibble(filled_gamete_data)
   return (filled_gamete_data)
 }
-
-#potentially use this instead of mutate_all
-#  dt[dt == "haplotype1"] <- "h1"
-#  dt[dt == "haplotype2"] <- "h2"
 
 #find recombination spots
 find_recomb_spots <- function(input_matrix, x, identities, genomic_positions){
@@ -297,6 +306,8 @@ write_csv(recomb_spots_all, filename_rs)
 
 if (!smooth_imputed_genotypes & smooth_crossovers){
   filled_sperm <- unsmooth(dt, filled_sperm)
+  filename_fs <- paste0(outDir, sampleName, "_", chrom, "_filled_sperm_unsmoothed.csv")
+  write_csv(filled_sperm, filename_fs)
 } else if(!smooth_imputed_genotypes & !smooth_crossovers){
   filled_sperm <- filled_sperm_recomb
 }
