@@ -37,8 +37,11 @@ samtools depth SRR10140446_aligned_sorted_chr10_dedup.bam > chr10_depth.txt
 grep 48740172 chr10_depth.txt
 # substitute number for genomic position 
 
-# Get coverage across the chromosome
+# Get coverage across the full chromosome
 awk '{ total += $3 } END { print total/NR }' chr10_depth.txt
 
 # Get coverage across the chromosome, excluding the peak
-awk '{if ($2 < 48739937 || $2 > 48740407) total += $3 } END { print total/NR }' chr10_depth.txt
+awk '{if ($2 < 78301703 || $2 > 78499310) {total+=$3; nrow++;} } END { print total/nrow }' 49_chr10_depth.txt
+
+# Get coverage only at the peak 
+awk '{if ($2 > 78301703 && $2 < 78499310) {total+=$3; nrow++;} } END { print total/nrow }' 49_chr10_depth.txt
