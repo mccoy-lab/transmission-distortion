@@ -7,7 +7,7 @@ bwa mem -t 16 hg38.fa.gz SRR10140446.fastq > SRR10140446.sam
 # need to use an indexed reference 
 
 # Sort sam file 
-samtools sort SRR10140446.sam -o SRR10140446_aligned_sorted.bam
+samtools sort -b SRR10140446.sam -o SRR10140446_aligned_sorted.bam
 
 # Index
 samtools index -@16 SRR10140446_aligned_sorted.bam 
@@ -38,7 +38,7 @@ grep 48740172 chr10_depth.txt
 # substitute number for genomic position 
 
 # Get coverage across the full chromosome
-awk '{ total += $3 } END { print total/NR }' chr10_depth.txt
+awk '{ total += $3 } END { print total/NR }' 49_chr10_depth.txt
 
 # Get coverage across the chromosome, excluding the peak
 awk '{if ($2 < 78301703 || $2 > 78499310) {total+=$3; nrow++;} } END { print total/nrow }' 49_chr10_depth.txt
