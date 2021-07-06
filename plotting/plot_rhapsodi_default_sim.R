@@ -11,7 +11,7 @@ ngams <- c(3, 15, 50, 150, 500, 1000, 2500, 5000)
 ngams_iter <- as.list(itertools::enumerate(ngams))
 covs <- c(0.001, 0.01, 0.1, 0.223, 0.357, 0.511, 0.693, 1.204, 2.303)
 covs_iter <- as.list(itertools::enumerate(covs))
-num_vals = length(nsnps) * length(ngams)  * length(covs)
+num_vals <- length(nsnps) * length(ngams)  * length(covs)
 rsds <- c(42, 357, 1848)
 gen_seqerror <- args[1]
 mod_seqerror <- 0.005
