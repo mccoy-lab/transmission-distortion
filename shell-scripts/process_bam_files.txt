@@ -7,7 +7,7 @@ bwa mem -t 16 hg38.fa.gz SRR10140446.fastq > SRR10140446.sam
 # need to use an indexed reference 
 
 # Sort sam file 
-samtools sort SRR10140446.sam -o SRR10140446_aligned_sorted.bam
+samtools sort -b SRR10140446.sam -o SRR10140446_aligned_sorted.bam
 
 # Index
 samtools index -@16 SRR10140446_aligned_sorted.bam 
@@ -27,7 +27,7 @@ samtools fixmate -m SRR10140446_aligned_sorted_chr10_namecollated.bam SRR1014044
 samtools sort -@16 -o SRR10140446_aligned_sorted_chr10_fixmate_sorted.bam SRR10140446_aligned_sorted_chr10_fixemate.bam
 
 # Remove duplicates
-samtools markdup -r -@16 SRR10140446_aligned_sorted_chr10_namecollated_sorted.bam SRR10140446_aligned_sorted_chr10_dedup.bam
+samtools markdup -r -@16 SRR10140446_aligned_sorted_chr10_fixmate_sorted.bam SRR10140446_aligned_sorted_chr10_dedup.bam
 # if you don't want to remove the duplicates (but just want them flagged), do not include the -r flag 
 
 # Get depth across chromosome file 
@@ -37,8 +37,11 @@ samtools depth SRR10140446_aligned_sorted_chr10_dedup.bam > chr10_depth.txt
 grep 48740172 chr10_depth.txt
 # substitute number for genomic position 
 
-# Get coverage across the chromosome
-awk '{ total += $3 } END { print total/NR }' chr10_depth.txt
+# Get coverage across the full chromosome
+awk '{ total += $3 } END { print total/NR }' 49_chr10_depth.txt
 
 # Get coverage across the chromosome, excluding the peak
-awk '{if ($2 < 48739937 || $2 > 48740407) total += $3 } END { print total/NR }' chr10_depth.txt
+awk '{if ($2 < 78301703 || $2 > 78499310) {total+=$3; nrow++;} } END { print total/nrow }' 49_chr10_depth.txt
+
+# Get coverage only at the peak 
+awk '{if ($2 > 78301703 && $2 < 78499310) {total+=$3; nrow++;} } END { print total/nrow }' 49_chr10_depth.txt
