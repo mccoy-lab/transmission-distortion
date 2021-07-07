@@ -70,7 +70,10 @@ for (nsnp in nsnps_iter){
 }
 
 snp_names <- as_labeller(c(`5000` = "5000 SNPs", `30000` = "30000 SNPs",`1e+05` = "100000 SNPs"))
-metric_names <- as_labeller(c("acc" = "Accuracy (%)", "com" = "Completeness (%)", "ser" = "Switch Error Rate", "lhs" = "Longest Haplotype Segment"))
+metric_names <- as_labeller(c("acc" = "Accuracy (%)", "com" = "Completeness (%)", "ser" = "Switch Error Rate", "lhs" = "Longest Haplotype Segment",
+                              "accuracy" = "Accuracy (%)", "precision" = "Precision", "recall" = "Recall", "f1" = "F1 Score",  "specificity" = "Specificity",
+                              "fdr" = "False Discovery Rate", "fpr" = "False Positive Rate", "true_n" = "# of true breakpoints", "pred_n" = "# of predicted breakpoints", 
+                              "tp" = "True Positives", "fp" = "False Positives", "tn" =  "True Negatives", "fn" = "False Negatives"))
 g <- ggplot(data = dt,
        aes(x = factor(coverage), y = factor(n_gametes), fill = value)) +
   geom_tile() + ggtitle(fig_title) +
