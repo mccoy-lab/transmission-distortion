@@ -2,8 +2,6 @@ library(itertools)
 library(tidyverse)
 library(data.table)
 library(ggplot2)
-library(patchwork)
-library(cowplot)
 library(gridExtra)
 
 nsnps <- c(5000, 30000, 100000)
@@ -84,7 +82,7 @@ g1 <- ggplot(data = dt,
 geom_tile() + ggtitle("Donor Haplotype") +
 facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
 theme(panel.background = element_blank(), panel.grid = element_blank()) +
-scale_fill_viridis_c(begin = 0, end = 1, values = c(0, 0.25, 0.5, 0.75, 1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
+scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
 theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 dt <- data.table(c())
@@ -107,7 +105,7 @@ g2 <- ggplot(data = dt,
   geom_tile() + ggtitle("Gamete Genotype") +
   facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
   theme(panel.background = element_blank(), panel.grid = element_blank()) +
-  scale_fill_viridis_c(begin = 0, end = 1, values = c(0, 0.25, 0.5, 0.75, 1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
+  scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
   theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 dt <- data.table(c())
@@ -130,9 +128,8 @@ g3 <- ggplot(data = dt,
   geom_tile() + ggtitle("Meiotic Recombination") +
   facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
   theme(panel.background = element_blank(), panel.grid = element_blank()) +
-  scale_fill_viridis_c(begin = 0, end = 1, values = c(0, 0.25, 0.5, 0.75, 1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
+  scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
   theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
-#g4 <- g1 + g2 + g3 + plot_layout(ncol = 1)
 combo_plot <- grid.arrange(g1, g2, g3, ncol = 1, nrow=3, heights = c(7, 7, 9.5))
 ggsave("main_metrics_fig2.png", combo_plot, width = 9, height = 18)
