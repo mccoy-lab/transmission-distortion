@@ -45,7 +45,7 @@ for (i in last_dim_metric){
           if (file_test("-f", fileOI)){
             load(fileOI)
             data_val <- assess_out[[metricOI_top]][[metricOI_bot]]
-            if (metricOI_bot == "acc" | metricOI_bot == "accuracy"){
+            if (metricOI_bot == "acc"){
               data_val <- data_val / 100
             }
             if (metricOI_bot == "lhs"){
