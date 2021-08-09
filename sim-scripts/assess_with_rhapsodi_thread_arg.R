@@ -13,12 +13,15 @@ threads <- as.integer(args[7])
 
 sim_base <- paste0("g",num_gametes,"_s",num_snps,"_c",cov,"_se",seq_error,"_r",avg_recomb,"/runGen_gam_",num_gametes,"_snp_", num_snps, "_cov_", cov, "_seqerr_", seq_error, "_avgr_", avg_recomb, "_rs_", random_seed)
 sim_out <- paste0("g",num_gametes,"_s",num_snps,"_c",cov,"_se",seq_error,"_r",avg_recomb,"/assess_out_rs_", random_seed, ".Rdata")
+pred_out <- paste0("g",num_gametes,"_s",num_snps,"_c",cov,"_se",seq_error,"_r",avg_recomb,"/rhapsodi_out_rs_", random_seed, ".Rdata")
+
 
 input_file <- paste0(sim_base,"_gametedf_na_truth_afseqednm.csv")
 dt <- read.delim(input_file, sep=",", na.strings = c("NA"))
 
 #Running rhapsodi
-rhapsodi_out <- rhapsodi_autorun(NULL, use_dt = TRUE, input_dt = dt, , mcstop=FALSE, threads = threads)
+rhapsodi_out <- rhapsodi_autorun(NULL, use_dt = TRUE, input_dt = dt, mcstop=FALSE, threads = threads)
+save(rhapsodi_out, file = pred_out)
 
 #Assessing rhapsodi
 true_ci_file <- paste0(sim_base, "_crossoverIndices_truth_ptfseqednm.csv")
