@@ -84,7 +84,7 @@ geom_tile() + ggtitle("A: Donor Haplotype") +
 facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
 theme(panel.background = element_blank(), panel.grid = element_blank()) +
 scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
-theme(plot.title = element_text(size = 20, face = "bold")) +
+theme(plot.title = element_text(size = 15, face = "bold")) +
 theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 dt <- data.table(c())
@@ -108,7 +108,7 @@ g2 <- ggplot(data = dt,
   facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
   theme(panel.background = element_blank(), panel.grid = element_blank()) +
   scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
-  theme(plot.title = element_text(size = 20, face = "bold")) +
+  theme(plot.title = element_text(size = 15, face = "bold")) +
   theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 dt <- data.table(c())
@@ -132,7 +132,7 @@ g3 <- ggplot(data = dt,
   facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
   theme(panel.background = element_blank(), panel.grid = element_blank()) +
   scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
-  theme(plot.title = element_text(size = 20, face = "bold")) +
+  theme(plot.title = element_text(size = 15, face = "bold")) +
   theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 combo_plot <- g1 + g2 + g3 + plot_layout(ncol = 1, nrow=3, heights = c(7, 7, 10.5), widths=c(9), guides="collect") & theme(legend.position="bottom", legend.text = element_text(angle=45, vjust=0.5))
