@@ -2,7 +2,8 @@ library(itertools)
 library(tidyverse)
 library(data.table)
 library(ggplot2)
-library(gridExtra)
+#library(gridExtra)
+library(patchwork)
 
 nsnps <- c(5000, 30000, 100000)
 nsnps_iter <- as.list(itertools::enumerate(nsnps))
@@ -18,12 +19,12 @@ gen_avgrecomb <- 1
 mod_avgrecomb <- 1
 
 data_mat <- array(rep(NA, num_vals), dim = c(length(nsnps), length(ngams), length(covs), 7))
-last_dim_metric <- list("phasing acc" = 1, 
-                        "phasing com" = 2, 
-                        "gam_imputation acc" = 3, 
-                        "gam_imputation com" = 4, 
-                        "recomb recall" = 5, 
-                        "recomb fdr" = 6, 
+last_dim_metric <- list("phasing acc" = 1,
+                        "phasing com" = 2,
+                        "gam_imputation acc" = 3,
+                        "gam_imputation com" = 4,
+                        "recomb recall" = 5,
+                        "recomb fdr" = 6,
                         "recomb f1" = 7)
 dir_base <- "/home/kweave23/gamete_data/gen_model_results_noDNM/"
 
@@ -60,7 +61,7 @@ for (i in last_dim_metric){
 
 snp_names <- as_labeller(c(`5000` = "5000 SNPs", `30000` = "30000 SNPs",`1e+05` = "100000 SNPs"))
 metric_names <- as_labeller(c("phasing acc" = "Phasing\nAccuracy", "phasing com" = "Phasing\nCompleteness",
-                              "gam_imputation acc" = "Inference\nAccuracy", "gam_imputation com" = "Inference\nCompleteness", "recomb recall" = "Discovery\nTPR", "recomb f1" = "Discovery\nF1 Score",  
+                              "gam_imputation acc" = "Imputation\nAccuracy", "gam_imputation com" = "Imputation\nCompleteness", "recomb recall" = "Discovery\nTPR", "recomb f1" = "Discovery\nF1 Score",
                               "recomb fdr" = "Discovery\nFDR"))
 dt <- data.table(c())
 for (i in c(1,2)){
@@ -79,10 +80,11 @@ for (i in c(1,2)){
 }
 g1 <- ggplot(data = dt,
      aes(x = factor(coverage), y = factor(n_gametes), fill = value)) +
-geom_tile() + ggtitle("Donor Haplotype") +
+geom_tile() + ggtitle("A: Donor Haplotype") +
 facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
 theme(panel.background = element_blank(), panel.grid = element_blank()) +
 scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
+theme(plot.title = element_text(size = 20, face = "bold")) +
 theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 dt <- data.table(c())
@@ -102,34 +104,36 @@ for (i in c(3,4)){
 }
 g2 <- ggplot(data = dt,
             aes(x = factor(coverage), y = factor(n_gametes), fill = value)) +
-  geom_tile() + ggtitle("Gamete Genotype") +
+  geom_tile() + ggtitle("B: Gamete Genotype") +
   facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
   theme(panel.background = element_blank(), panel.grid = element_blank()) +
   scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
+  theme(plot.title = element_text(size = 20, face = "bold")) +
   theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
 dt <- data.table(c())
 for (i in c(5,6,7)){
   metricOI <- names(last_dim_metric[i])
   for (nsnp in nsnps_iter){
-    nsnp_mat <- data.table(data_mat[nsnp$index,,,i]) %>% 
-      cbind(ngams, .) %>% 
-      `colnames<-`(c("ngams", covs)) %>% 
-      pivot_longer(-ngams,  names_to = "coverage") %>% 
-      as.data.table() %>% 
-      setnames(., c("n_gametes", "coverage", "value")) %>% 
-      .[, n_snps := nsnp$value] %>% 
+    nsnp_mat <- data.table(data_mat[nsnp$index,,,i]) %>%
+      cbind(ngams, .) %>%
+      `colnames<-`(c("ngams", covs)) %>%
+      pivot_longer(-ngams,  names_to = "coverage") %>%
+      as.data.table() %>%
+      setnames(., c("n_gametes", "coverage", "value")) %>%
+      .[, n_snps := nsnp$value] %>%
       .[, metric := metricOI]
     dt <- rbind(dt, nsnp_mat)
   }
 }
 g3 <- ggplot(data = dt,
              aes(x = factor(coverage), y = factor(n_gametes), fill = value)) +
-  geom_tile() + ggtitle("Meiotic Recombination") +
+  geom_tile() + ggtitle("C: Meiotic Recombination") +
   facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
   theme(panel.background = element_blank(), panel.grid = element_blank()) +
   scale_fill_viridis_c(limits=c(0,1)) + xlab("Coverage (x)") + ylab("Number of gametes") + theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) +
+  theme(plot.title = element_text(size = 20, face = "bold")) +
   theme(text = element_text(size=14)) + coord_fixed(clip=FALSE)
 
-combo_plot <- grid.arrange(g1, g2, g3, ncol = 1, nrow=3, heights = c(7, 7, 9.5))
-ggsave("main_metrics_fig2.png", combo_plot, width = 9, height = 18)
+combo_plot <- g1 + g2 + g3 + plot_layout(ncol = 1, nrow=3, heights = c(7, 7, 10.5), widths=c(9), guides="collect") & theme(legend.position="bottom", legend.text = element_text(angle=45, vjust=0.5))
+ggsave("main_metrics.png", combo_plot, width = 9, height = 18)
