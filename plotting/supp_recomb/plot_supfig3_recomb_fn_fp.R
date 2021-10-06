@@ -81,7 +81,7 @@ for (cov in covs){
     file_base <- paste0("runGen_gam_",ngam,"_snp_", as.character(as.integer(nsnp)), "_cov_", cov, "_seqerr_", gen_seqerror, "_avgr_", gen_avgrecomb, "_rs_", rsd)
     input_file <- paste0(dir_base, sim_base, file_base, "_gametedf_na_truth_afseqednm.csv")
     dt <- read.delim(input_file, sep=",", na.strings = c("NA"))
-    standard_out <- rhapsodi::standard_input(NULL, use_dt = TRUE, input_dt = dt)
+    standard_out <- rhapsodi::read_data(NULL, use_dt = TRUE, input_dt = dt)
     data_file_pred <- paste0("rhapsodi_out_rs_", rsd ,".Rdata")
     data_file_true <- paste0("_crossoverIndices_truth_ptfseqednm.csv")
     #fileOIpred <- paste0(dir_base, dir_data, data_file_pred) #predictions
@@ -114,52 +114,24 @@ for (cov in covs){
   }
 }
 
-bell_named_list_fn <- list()
-for (i in 1:length(covs)){
-  bell_long_df <- data.frame()
-  cov <- covs[i]
-  for (rsd in rsds){
-    bell_long_df <- rbind(bell_long_df, data.frame(fn=storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fn, cov=cov))
-  }
-  bell_named_list_fn[[paste0("c", cov)]] <- bell_long_df
-}
-
-bell_long_fn <- rbindlist(bell_named_list_fn)
-
-p <- ggplot(bell_long_fn, aes(as.factor(cov), fn.fn)) + theme_bw() + theme(panel.grid = element_blank()) 
-p + geom_point() + labs(x = 'Coverage (x)', y='relative location of false negatives')
-ggsave('bell_sim_breakpoint_fn_full.png')
-
-
-bell_named_list_fp <- list()
-for (i in 1:length(covs)){
-  bell_long_df <- data.frame()
-  cov <- covs[i]
-  for (rsd in rsds){
-    bell_long_df <- rbind(bell_long_df, data.frame(fp=storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fp, cov=cov))
-  }
-  bell_named_list_fp[[paste0("c", cov)]] <- bell_long_df
-}
-
-bell_long_fp <- rbindlist(bell_named_list_fp)
-
-p <- ggplot(bell_long_fp, aes(as.factor(cov), fp.fp)) + theme_bw() + theme(panel.grid = element_blank()) 
-p + geom_point() + labs(x = 'Coverage (x)', y='relative location of false positives')
-ggsave('bell_sim_breakpoint_fp_full.png')
-
 plot_fn_fp <- function(covs, rsds, storage_list){
   tall_df <- data.frame()
   for (cov in covs){
+    num_uniq_gametes <- 0
     for (rsd in rsds){
-      melted_df <- melt(merge(storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fn, storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fp, all = TRUE, by = "gam"))
+      fp_info <- storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fp
+      fp_info$gam <- unlist(lapply(1:length(storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fp$gam), function(x) paste0(storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fp$gam[x], "_", rsd)))
+      fn_info <- storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fn
+      fn_info$gam <- unlist(lapply(1:length(storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fn$gam), function(x) paste0(storage_list[[paste0("c",cov)]][[paste0("df",rsd)]]$fn$gam[x], "_", rsd)))
+      melted_df <- melt(merge(as.data.table(fn_info), as.data.table(fp_info), all = TRUE, by = "gam"))
       melted_df$coverage <- paste0("Coverage: ", cov)
-      tall_df <- rbind(tall_df, melted_df)  
+      tall_df <- rbind(tall_df, melted_df)
+      num_uniq_gametes <- num_uniq_gametes + length(unique(melted_df$gam))
     }
+    message(paste0("Coverage: ", cov, " num_gametes: ", num_uniq_gametes))
   }
-  p <- ggplot(tall_df, aes(as.factor(gam), value, shape=factor(variable), size=factor(variable))) + scale_size_manual(values=c("fn"=1.25, "fp"=1.05)) + scale_shape_manual(values=c("fn"=19, "fp"=3)) + theme_bw() + theme(panel.grid = element_blank(), axis.text.x=element_blank()) + facet_wrap(~coverage, ncol=length(covs), scales="free_x")
-  new_p <- p + geom_point(aes(colour = factor(variable)), size=1.25, stroke=1.5) + scale_colour_manual(values=c("fn"="tomato", "fp"="black")) + labs(y='relative location', x="gamete")
-  
-  ggsave("fn_fp_by_gamete.png")
+  p <- ggplot(tall_df, aes(value, as.factor(gam), shape=factor(variable), size=factor(variable))) + scale_size_manual(values=c("fn"=1.5, "fp"=0.75)) + scale_shape_manual(values=c("fn"=19, "fp"=20)) + theme_bw() + theme(panel.grid.major.x = element_blank(), panel.grid.major.y = element_line( size=0.05, color="gray"), panel.grid = element_blank(), axis.text.y=element_blank()) + facet_wrap(~coverage, ncol=2, scales="free_y")
+  new_p <- p + geom_point(aes(colour = factor(variable))) + scale_colour_manual(values=c("fn"="tomato", "fp"="black")) + labs(x='relative chromosomal location', y="gamete", color="prediction class", shape="prediction class", size="prediction class")
   return(new_p)
 }
 
