@@ -30,6 +30,8 @@ assess_it <- function(dir_base1, sample, sample_desc, dir_base2, chr){
   rhapsodi_gametes <- read.delim(paste0(dir_base1, sample, dir_base2, sample, "_", chr, "_filled_sperm_unsmoothed.csv"), sep=",", na.strings = c("NA"))
   rhapsodi_recode_gametes <- re_recode_gametes(rhapsodi_gametes, rhapsodi_haps)
   rhapsodi_recomb <- read.delim(paste0(dir_base1, sample, dir_base2, sample, "_", chr, "_recombination_locs.csv"), sep=",", na.strings = c("NA"))
+  full_filter_input <- read.delim(paste0(dir_base1, sample, dir_base2, sample, "_", chr, "_full_filtered_dt.csv"), sep=",", na.strings = c("NA"))
+  
   
   num_snps <- nrow(rhapsodi_haps)
   num_gametes <- ncol(rhapsodi_gametes)
@@ -43,10 +45,14 @@ assess_it <- function(dir_base1, sample, sample_desc, dir_base2, chr){
   imputation_completeness_vec <- imputation_assess$com
   imputation_completeness_str <- paste0(imputation_completeness_vec, collapse="_")
   
+  input_assess <- rhapsodi::sim_assess_gam_imputation(fake_true_gametes, full_filter_input[,-1], num_snps, num_gametes)
+  input_completeness_vec <- input_assess$com
+  input_completeness_str <- paste0(input_completeness_vec, collapse="_")
+  
   res_vec <- rhapsodi_recomb$Genomic_end[!is.na(rhapsodi_recomb$Genomic_end)] - rhapsodi_recomb$Genomic_start[!is.na(rhapsodi_recomb$Genomic_start)]
   res_vec_str <- paste0(res_vec, collapse = "_")
   
-  out <- data.frame(sample = sample, sample_desc = sample_desc,  chr = chrom, num_snps = num_snps, num_gametes = num_gametes, phase_com = phasing_completeness, imp_com = imputation_completeness_str, res = res_vec_str)
+  out <- data.frame(sample = sample, sample_desc = sample_desc,  chr = chrom, num_snps = num_snps, num_gametes = num_gametes, phase_com = phasing_completeness, imp_com = imputation_completeness_str, input_com = input_completeness_str, res = res_vec_str)
   return(out)
 }
 
