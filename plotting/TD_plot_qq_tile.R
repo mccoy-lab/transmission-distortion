@@ -57,8 +57,8 @@ print("good to before q")
 q <- ggplot(data = rbind(dt[pval < 0.01], dt[pval >= 0.01][sample(1:nrow(dt[pval >= 0.01]), 50000)]), 
             aes(x = -log10(expected_p), y = -log10(pval))) + xlab(expression(paste("Hb", A[1][c]," (%)", sep=""))) +
   geom_point(size = 2) +
-  xlab(expression(Expected - log[10](italic(p)))) + 
-  ylab(expression(Observed - log[10](italic(p)))) +
+  xlab(expression(Expected -log[10](italic(p)))) + 
+  ylab(expression(Observed -log[10](italic(p)))) +
   theme_bw() +
   theme(panel.grid = element_blank()) +
   xlim(0, 8) +
