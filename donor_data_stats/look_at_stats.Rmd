@@ -1,0 +1,469 @@
+---
+title: "Donor Data Stats"
+author: "Kate Weaver"
+date: "10/16/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages and dataframe 
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(here)
+library(patchwork)
+library(data.table)
+
+load("bell_true_com_res_withInput.Rdata")
+colnames(full_df)
+
+inf_df <- full_df[full_df$sample_desc == "inf",]
+ninf_df <- full_df[full_df$sample_desc == "ninf",]
+
+```
+
+## Look at number of gametes
+
+```{r}
+donor_spec_gam <- lapply(1:length(unique(full_df$sample)), function(x) full_df$num_gametes[which(unique(full_df$sample)[x] == full_df$sample)]) %>% `names<-`(unique(full_df$sample))
+donor_spec_gam
+```
+
+```{r}
+unlist(lapply(1:length(donor_spec_gam), function(x) length(unique(donor_spec_gam[[x]]))  == 1)) %>% `names<-`(names(donor_spec_gam))
+```
+
+Note that all donors but ff4a have differing numbers of gametes per chromosome. Could this be due to filtering to just euploid data?
+
+To get the highest total number of gametes:
+
+```{r}
+max_donor <- unlist(lapply(1:length(donor_spec_gam), function(x) max(donor_spec_gam[[x]])))
+max_donor
+highest_total <- sum(max_donor)
+highest_total
+```
+
+```{r}
+num_gams <- data.frame()
+for (i in 1:22){
+  num_gams <- rbind(num_gams, data.frame(chr=paste0("chr", i), num_cells=sum(unlist(lapply(1:length(names(donor_spec_gam)), function(x) donor_spec_gam[[x]][i])))))
+}
+num_gams
+```
+Given the observation before this that gamete number isn't constant across chromosomes for a given donor, here I've summed the number of gametes across the donors in a chromosome specific manner. chr9 has the minimum number of 42722 cells and chr12 has the maximum with 42791 cells. Note this is with pooling the infertile donors with the original set.
+
+```{r}
+mean(num_gams$num_cells)
+```
+
+### Infertile Donors
+```{r}
+min_inf_gam <- which(inf_df$num_gametes == min(inf_df$num_gametes))[1]
+inf_df[min_inf_gam, c("sample", "chr", "num_gametes")]
+```
+
+```{r}
+max_inf_gam <- which(inf_df$num_gametes == max(inf_df$num_gametes))[1]
+inf_df[max_inf_gam, c("sample", 'chr', "num_gametes")]
+```
+
+```{r}
+quant_inf <- quantile(inf_df$num_gametes)
+quant_inf
+```
+
+
+### Original Cohort of Donors
+```{r}
+min_ninf_gam <- which(ninf_df$num_gametes == min(ninf_df$num_gametes))[1]
+ninf_df[min_ninf_gam, c("sample",'chr', "num_gametes")]
+```
+
+```{r}
+max_ninf_gam <- which(ninf_df$num_gametes == max(ninf_df$num_gametes))[1]
+ninf_df[max_ninf_gam, c("sample",'chr', "num_gametes")]
+```
+
+```{r}
+quant_ninf <- quantile(ninf_df$num_gametes)
+quant_ninf
+```
+
+```{r}
+quant_tot <- quantile(full_df$num_gametes)
+quant_tot
+```
+
+```{r}
+g_inf <- ggplot(inf_df, aes(x = sample_desc, y = num_gametes)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$num_gametes[min_ninf_gam], inf_df$num_gametes[min_inf_gam]), max(ninf_df$num_gametes[max_ninf_gam], inf_df$num_gametes[max_inf_gam]))) 
+g_ninf <- ggplot(ninf_df, aes(x = sample_desc, y = num_gametes)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$num_gametes[min_ninf_gam], inf_df$num_gametes[min_inf_gam]), max(ninf_df$num_gametes[max_ninf_gam], inf_df$num_gametes[max_inf_gam])))
+g_tot <- ggplot(full_df, aes(y = num_gametes)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$num_gametes[min_ninf_gam], inf_df$num_gametes[min_inf_gam]), max(ninf_df$num_gametes[max_ninf_gam], inf_df$num_gametes[max_inf_gam]))) + scale_x_discrete(labels=c("both"))
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+
+In this plot of the number of gametes (donor and chromosome specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left.
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_df$num_gametes)))
+message(paste0("sd infertile donors: ", sd(inf_df$num_gametes)))
+message(paste0("mean original donors: ", mean(ninf_df$num_gametes)))
+message(paste0("sd original donors: ", sd(ninf_df$num_gametes)))
+message(paste0('mean all: ', mean(full_df$num_gametes)))
+message(paste0("sd all: ", sd(full_df$num_gametes)))
+```
+
+## Look at number of SNPs post filtering
+
+```{r}
+donor_spec_snp <- lapply(1:length(unique(full_df$sample)), function(x) full_df$num_snps[which(unique(full_df$sample)[x] == full_df$sample)]) %>% `names<-`(unique(full_df$sample))
+donor_spec_snp
+```
+
+```{r}
+for (i in 1:22){
+  hist(unlist(lapply(1:length(names(donor_spec_snp)), function(x) donor_spec_snp[[x]][i])), main=paste0("chr", i))
+  
+}
+```
+
+these are chromosome specific counts of the number of hetSNPs following filtering.
+
+### Infertile Donors
+```{r}
+min_inf_snp <- which(inf_df$num_snps == min(inf_df$num_snps))[1]
+inf_df[min_inf_snp, c("sample", "chr", "num_snps")]
+```
+
+```{r}
+max_inf_snp <- which(inf_df$num_snps == max(inf_df$num_snps))[1]
+inf_df[max_inf_snp, c("sample", "chr", "num_snps")]
+```
+
+```{r}
+quant_inf_snp <- quantile(inf_df$num_snps)
+quant_inf_snp
+```
+
+### Original Cohort of Donors
+
+```{r}
+min_ninf_snp <- which(ninf_df$num_snps == min(ninf_df$num_snps))[1]
+ninf_df[min_ninf_snp, c("sample", "chr", "num_snps")]
+```
+
+```{r}
+max_ninf_snp <- which(ninf_df$num_snps == max(ninf_df$num_snps))[1]
+ninf_df[max_ninf_snp, c("sample", "chr", "num_snps")]
+```
+```{r}
+quant_ninf_snp <- quantile(ninf_df$num_snps)
+quant_ninf_snp
+```
+
+```{r}
+g_inf <- ggplot(inf_df, aes(x = sample_desc, y = num_snps)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$num_snps[min_ninf_snp], inf_df$num_snps[min_inf_snp]), max(ninf_df$num_snps[max_ninf_snp], inf_df$num_snps[max_inf_snp]))) 
+g_ninf <- ggplot(ninf_df, aes(x = sample_desc, y = num_snps)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$num_snps[min_ninf_snp], inf_df$num_snps[min_inf_snp]), max(ninf_df$num_snps[max_ninf_snp], inf_df$num_snps[max_inf_snp])))
+g_tot <- ggplot(full_df, aes(y = num_snps)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$num_snps[min_ninf_snp], inf_df$num_snps[min_inf_snp]), max(ninf_df$num_snps[max_ninf_snp], inf_df$num_snps[max_inf_snp]))) + scale_x_discrete(labels=c("both"))
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+
+In this plot of the number of hetsNPs, after filtering, (donor and chromosome specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left. We seem to have under-estimated the average number of SNPs by using 30K for the simulations. But 30K is near the average for chr17 and chr20 (and is the standard deviation as seen below). And since we do better as we get more data, low-balling this should be no problem at all.
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_df$num_snps)))
+message(paste0("sd infertile donors: ", sd(inf_df$num_snps)))
+message(paste0("mean original donors: ", mean(ninf_df$num_snps)))
+message(paste0("sd original donors: ", sd(ninf_df$num_snps)))
+message(paste0('mean all: ', mean(full_df$num_snps)))
+message(paste0("sd all: ", sd(full_df$num_snps)))
+```
+
+## look at phasing completeness
+
+```{r}
+hist(full_df$phase_com)
+```
+
+```{r}
+min(full_df$phase_com)
+max(full_df$phase_com)
+mean(full_df$phase_com)
+sd(full_df$phase_com)
+quantile(full_df$phase_com)
+```
+
+### Infertile donors
+
+```{r}
+hist(inf_df$phase_com)
+```
+
+```{r}
+min(inf_df$phase_com)
+max(inf_df$phase_com)
+mean(inf_df$phase_com)
+sd(inf_df$phase_com)
+quantile(inf_df$phase_com)
+```
+
+### Original set of donors
+
+```{r}
+hist(ninf_df$phase_com)
+```
+
+```{r}
+min(ninf_df$phase_com)
+max(ninf_df$phase_com)
+mean(ninf_df$phase_com)
+sd(ninf_df$phase_com)
+quantile(ninf_df$phase_com)
+```
+
+```{r}
+min_inf_pcom <- which(inf_df$phase_com == min(inf_df$phase_com))[1]
+min_ninf_pcom <- which(ninf_df$phase_com == min(ninf_df$phase_com))[1]
+max_inf_pcom <- which(inf_df$phase_com == max(inf_df$phase_com))[1]
+max_ninf_pcom <- which(ninf_df$phase_com == max(ninf_df$phase_com))[1]
+
+g_inf <- ggplot(inf_df, aes(x = sample_desc, y = phase_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$phase_com[min_ninf_pcom], inf_df$phase_com[min_inf_pcom]), max(ninf_df$phase_com[max_ninf_pcom], inf_df$phase_com[max_inf_pcom]))) 
+g_ninf <- ggplot(ninf_df, aes(x = sample_desc, y = phase_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$phase_com[min_ninf_pcom], inf_df$phase_com[min_inf_pcom]), max(ninf_df$phase_com[max_ninf_pcom], inf_df$phase_com[max_inf_pcom])))
+g_tot <- ggplot(full_df, aes(y = phase_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_df$phase_com[min_ninf_pcom], inf_df$phase_com[min_inf_pcom]), max(ninf_df$phase_com[max_ninf_pcom], inf_df$phase_com[max_inf_pcom]))) + scale_x_discrete(labels=c("both"))
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+
+In this plot of the phasing completeness (donor and chromosome specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left.
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_df$phase_com)))
+message(paste0("sd infertile donors: ", sd(inf_df$phase_com)))
+message(paste0("mean original donors: ", mean(ninf_df$phase_com)))
+message(paste0("sd original donors: ", sd(ninf_df$phase_com)))
+message(paste0('mean all: ', mean(full_df$phase_com)))
+message(paste0("sd all: ", sd(full_df$phase_com)))
+```
+
+Infertile donors appear to have slightly suppressed phasing completeness, but overall comparable to the original donors. The mean for both cohorts together is 99.89 +- 0.19% complete 
+
+## look at gamete imputation completeness
+
+```{r}
+undo_str_vec <- function(str_vec){
+  undone <- as.numeric(unlist(strsplit(str_vec, '_')))
+  return(undone)
+}
+```
+
+```{r}
+all_imp_com <- unlist(lapply(1:nrow(full_df), function(x) undo_str_vec(full_df$imp_com[x])))
+inf_imp_com <- unlist(lapply(1:nrow(inf_df), function(x) undo_str_vec(inf_df$imp_com[x])))
+ninf_imp_com <- unlist(lapply(1:nrow(ninf_df), function(x) undo_str_vec(ninf_df$imp_com[x])))
+```
+
+```{r}
+min_inf_icom <- which(inf_imp_com == min(inf_imp_com))[1]
+min_ninf_icom <- which(ninf_imp_com == min(ninf_imp_com))[1]
+max_inf_icom <- which(inf_imp_com == max(inf_imp_com))[1]
+max_ninf_icom <- which(ninf_imp_com == max(ninf_imp_com))[1]
+
+g_inf <- ggplot(as.data.table(inf_imp_com), aes(y=inf_imp_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_imp_com[min_ninf_icom], inf_imp_com[min_inf_icom]), max(ninf_imp_com[max_ninf_icom], inf_imp_com[max_inf_icom]))) 
+g_ninf <- ggplot(as.data.table(ninf_imp_com), aes(y=ninf_imp_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_imp_com[min_ninf_icom], inf_imp_com[min_inf_icom]), max(ninf_imp_com[max_ninf_icom], inf_imp_com[max_inf_icom])))
+g_tot <- ggplot(as.data.table(all_imp_com), aes(y=all_imp_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_imp_com[min_ninf_icom], inf_imp_com[min_inf_icom]), max(ninf_imp_com[max_ninf_icom], inf_imp_com[max_inf_icom]))) + scale_x_discrete(labels=c("both"))
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+
+In this plot of the gamete imputation completeness (donor, chromosome, and gamete specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left. Note that the min for the infertile donors is 0% completeness, compared to about 73% for the original donor set. Thankfully, this is a major outlier as the 25th percentile is around 98% (as seen below). 
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_imp_com)))
+message(paste0("sd infertile donors: ", sd(inf_imp_com)))
+message(paste0("mean original donors: ", mean(ninf_imp_com)))
+message(paste0("sd original donors: ", sd(ninf_imp_com)))
+message(paste0('mean all: ', mean(all_imp_com)))
+message(paste0("sd all: ", sd(all_imp_com)))
+```
+
+### Original set of donors
+```{r}
+min(ninf_imp_com)
+max(ninf_imp_com)
+mean(ninf_imp_com)
+sd(ninf_imp_com)
+quantile(ninf_imp_com)
+```
+
+### Infertile donors
+```{r}
+min(inf_imp_com)
+max(inf_imp_com)
+mean(inf_imp_com)
+sd(inf_imp_com)
+quantile(inf_imp_com)
+```
+
+## breakpoint resolution (in base pairs for real this time!)
+```{r}
+all_res <- unlist(lapply(1:nrow(full_df), function(x) undo_str_vec(full_df$res[x])))
+inf_res <- unlist(lapply(1:nrow(inf_df), function(x) undo_str_vec(inf_df$res[x])))
+ninf_res <- unlist(lapply(1:nrow(ninf_df), function(x) undo_str_vec(ninf_df$res[x])))
+```
+
+```{r}
+min_inf_res <- which(inf_res == min(inf_res))[1]
+min_ninf_res <- which(ninf_res == min(ninf_res))[1]
+max_inf_res <- which(inf_res == max(inf_res))[1]
+max_ninf_res <- which(ninf_res == max(ninf_res))[1]
+
+g_inf <- ggplot(as.data.table(inf_res), aes(y=inf_res)) + geom_boxplot() + scale_y_log10() + annotation_logticks(scaled=TRUE, sides='l')
+g_ninf <- ggplot(as.data.table(ninf_res), aes(y=ninf_res)) + geom_boxplot() + scale_y_log10() + annotation_logticks(scaled=TRUE, sides='l')
+g_tot <- ggplot(as.data.table(all_res), aes(y=all_res)) + geom_boxplot() + scale_x_discrete(labels=c("both")) + scale_y_log10() + annotation_logticks(scaled=TRUE, sides='l')
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+In this plot of the predicted meiotic breakpoint resolution (donor, chromosome, and gamete specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left. Note that the breakpoint resolution is actual base pairs this time! 
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_res)))
+message(paste0("sd infertile donors: ", sd(inf_res)))
+message(paste0("mean original donors: ", mean(ninf_res)))
+message(paste0("sd original donors: ", sd(ninf_res)))
+message(paste0('mean all: ', mean(all_res)))
+message(paste0("sd all: ", sd(all_res)))
+```
+
+### Original set of donors
+```{r}
+min(ninf_res)
+max(ninf_res)
+mean(ninf_res)
+sd(ninf_res)
+quantile(ninf_res)
+```
+
+### Infertile donors
+```{r}
+min(inf_res)
+max(inf_res)
+mean(inf_res)
+sd(inf_res)
+quantile(inf_res)
+```
+
+## completeness of input data
+```{r}
+all_input_com <- unlist(lapply(1:nrow(full_df), function(x) undo_str_vec(full_df$input_com[x])))
+inf_input_com <- unlist(lapply(1:nrow(inf_df), function(x) undo_str_vec(inf_df$input_com[x])))
+ninf_input_com <- unlist(lapply(1:nrow(ninf_df), function(x) undo_str_vec(ninf_df$input_com[x])))
+```
+
+```{r}
+min_inf_inpcom <- which(inf_input_com == min(inf_input_com))[1]
+min_ninf_inpcom <- which(ninf_input_com == min(ninf_input_com))[1]
+max_inf_inpcom <- which(inf_input_com == max(inf_input_com))[1]
+max_ninf_inpcom <- which(ninf_input_com == max(ninf_input_com))[1]
+
+g_inf <- ggplot(as.data.table(inf_input_com), aes(y=inf_input_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_input_com[min_ninf_inpcom], inf_input_com[min_inf_inpcom]), max(ninf_input_com[max_ninf_inpcom], inf_input_com[max_inf_inpcom]))) 
+g_ninf <- ggplot(as.data.table(ninf_input_com), aes(y=ninf_input_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_input_com[min_ninf_inpcom], inf_input_com[min_inf_inpcom]), max(ninf_input_com[max_ninf_inpcom], inf_input_com[max_inf_inpcom]))) 
+g_tot <- ggplot(as.data.table(all_input_com), aes(y=all_input_com)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_input_com[min_ninf_inpcom], inf_input_com[min_inf_inpcom]), max(ninf_input_com[max_ninf_inpcom], inf_input_com[max_inf_inpcom]))) + scale_x_discrete(labels=c("both"))
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+
+In this plot of the input completeness (donor, chromosome, and gamete specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left. Note that the max for the infertile donors is >9% completeness, compared to about 7.5% for the original donor set. 
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_input_com)))
+message(paste0("sd infertile donors: ", sd(inf_input_com)))
+message(paste0("mean original donors: ", mean(ninf_input_com)))
+message(paste0("sd original donors: ", sd(ninf_input_com)))
+message(paste0('mean all: ', mean(all_input_com)))
+message(paste0("sd all: ", sd(all_input_com)))
+```
+
+### Original set of donors
+```{r}
+min(ninf_input_com)
+max(ninf_input_com)
+mean(ninf_input_com)
+sd(ninf_input_com)
+quantile(ninf_input_com)
+```
+
+### Infertile donors
+```{r}
+min(inf_input_com)
+max(inf_input_com)
+mean(inf_input_com)
+sd(inf_input_com)
+quantile(inf_input_com)
+```
+
+
+### Completeness to coverage
+
+for this next group of EDA, we'll translate to the missing genotype rate (MGR) and then translate missing genotype rate to coverage. I assume that MGR is the opposite of completeness or the # of NAs / number of SNPs (as opposed to the number of non-NAs / number of SNPs which is completeness). So this is just subtracting the completeness from 1. we then translate it to coverage by taking the -log. 
+```{r}
+all_input_cov <- unlist(lapply(1:nrow(full_df), function(x) -log(1-undo_str_vec(full_df$input_com[x]))))
+inf_input_cov <- unlist(lapply(1:nrow(inf_df), function(x) -log(1-undo_str_vec(inf_df$input_com[x]))))
+ninf_input_cov <- unlist(lapply(1:nrow(ninf_df), function(x) -log(1-undo_str_vec(ninf_df$input_com[x]))))
+```
+
+```{r}
+min_inf_inpcov <- which(inf_input_cov == min(inf_input_cov))[1]
+min_ninf_inpcov <- which(ninf_input_cov == min(ninf_input_cov))[1]
+max_inf_inpcov <- which(inf_input_cov == max(inf_input_cov))[1]
+max_ninf_inpcov <- which(ninf_input_cov == max(ninf_input_cov))[1]
+
+g_inf <- ggplot(as.data.table(inf_input_cov), aes(y=inf_input_cov)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_input_cov[min_ninf_inpcov], inf_input_cov[min_inf_inpcov]), max(ninf_input_cov[max_ninf_inpcov], inf_input_cov[max_inf_inpcov]))) 
+g_ninf <- ggplot(as.data.table(ninf_input_cov), aes(y=ninf_input_cov)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_input_cov[min_ninf_inpcov], inf_input_cov[min_inf_inpcov]), max(ninf_input_cov[max_ninf_inpcov], inf_input_cov[max_inf_inpcov])))  
+g_tot <- ggplot(as.data.table(all_input_cov), aes(y=all_input_cov)) + geom_boxplot() + scale_y_continuous(limits=c(min(ninf_input_cov[min_ninf_inpcov], inf_input_cov[min_inf_inpcov]), max(ninf_input_cov[max_ninf_inpcov], inf_input_cov[max_inf_inpcov])))  + scale_x_discrete(labels=c("both"))
+
+g <- g_inf + g_ninf + g_tot
+g
+```
+
+In this plot of the input approximate coverage (donor, chromosome, and gamete specific), the infertile donors are on the left, the original donor set is in the middle, the combined set is on the left.
+
+``` {r}
+message(paste0("mean infertile donors: ", mean(inf_input_cov)))
+message(paste0("sd infertile donors: ", sd(inf_input_cov)))
+message(paste0("mean original donors: ", mean(ninf_input_cov)))
+message(paste0("sd original donors: ", sd(ninf_input_cov)))
+message(paste0('mean all: ', mean(all_input_cov)))
+message(paste0("sd all: ", sd(all_input_cov)))
+```
+
+### Original set of donors
+```{r}
+min(ninf_input_cov)
+max(ninf_input_cov)
+mean(ninf_input_cov)
+sd(ninf_input_cov)
+quantile(ninf_input_cov)
+```
+
+### Infertile donors
+```{r}
+min(inf_input_cov)
+max(inf_input_cov)
+mean(inf_input_cov)
+sd(inf_input_cov)
+quantile(inf_input_cov)
+```
