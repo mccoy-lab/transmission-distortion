@@ -165,7 +165,7 @@ make_ggobj <- function(nsnps_iter, plots_list, j, out_base, out_title, to_it_vec
                        aes(x = factor(coverage), y = factor(n_gametes), fill = difference)) +
         geom_tile(show.legend = c(value=TRUE, outline=FALSE)) +
         geom_tile(data = se_dt[!is.na(se_dt$outline),] , aes(colour=outline), size = 0.75, show.legend = FALSE) +
-        ggtitle(paste0(out_title[j], " Sequencing Error Rate\nA: Donor Haplotype Phasing")) + 
+        ggtitle(paste0(out_title[j], " Genotyping Error Rate\nA: Donor Haplotype Phasing")) + 
         facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
         theme(panel.background = element_blank(), panel.grid = element_blank()) +
         scale_fill_viridis_c(limits=c(-1,1)) +
@@ -191,7 +191,7 @@ make_ggobj <- function(nsnps_iter, plots_list, j, out_base, out_title, to_it_vec
                          aes(x = factor(coverage), y = factor(n_gametes), fill = difference)) +
           geom_tile(show.legend = c(value=TRUE, outline=FALSE)) +
           geom_tile(data = se_dt[!is.na(se_dt$outline),] , aes(colour=outline), size = 0.75, show.legend = FALSE) +
-          ggtitle(paste0(out_title[j], " Sequencing Error Rate\nA: Donor Haplotype Phasing")) +
+          ggtitle(paste0(out_title[j], " Genotyping Error Rate\nA: Donor Haplotype Phasing")) +
           facet_grid(metric ~ n_snps, labeller = labeller(metric = metric_names, n_snps = snp_names)) +
           theme(panel.background = element_blank(), panel.grid = element_blank()) +
           scale_fill_viridis_c(limits=c(-1,1)) +
