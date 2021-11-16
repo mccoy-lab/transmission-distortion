@@ -37,9 +37,9 @@ find_donor <- function(donor_chrom_combo_element){
 }
 
 gam_full_df_list <- pbmcapply::pbmclapply(1:length(donor_chrom_combo), 
-                                          function(x) rhapsodi::sim_generate_global(find_ngam(find_donor(donor_chrom_gam[x]), find_chrom(donor_chrom_gam[x]), donor_chrom_meta),
-                                                                                    find_num_snps(find_donor(donor_chrom_gam[x]), find_chrom(donor_chrom_gam[x]), donor_chrom_meta),
-                                                                                    find_n_crossovers(find_donor(donor_chrom_gam[x]), find_chrom(donor_chrom_gam[x]), gamete_meta),
+                                          function(x) rhapsodi::sim_generate_global(find_ngam(find_donor(donor_chrom_combo[x]), find_chrom(donor_chrom_combo[x]), donor_chrom_meta),
+                                                                                    find_num_snps(find_donor(donor_chrom_combo[x]), find_chrom(donor_chrom_combo[x]), donor_chrom_meta),
+                                                                                    find_n_crossovers(find_donor(donor_chrom_combo[x]), find_chrom(donor_chrom_combo[x]), gamete_meta),
                                                                                     random_seed = random_seed),
                                           mc.cores = getOption("mc.cores", threads)) %>% `names<-`(donor_chrom_combo)
 
