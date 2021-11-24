@@ -4,6 +4,9 @@ library(data.table)
 library(pbapply)
 library(ggplot2)
 
+load_data <- TRUE
+
+if (!load_data){
 window_size <- 1e6
 
 donor_chrom_meta <- read.csv("/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/donor_chrom_meta_dt.csv")
@@ -56,8 +59,14 @@ melted_df$chr_num <- as.integer(str_replace(melted_df$chr, "chr", ""))
 melted_df <- setorder(melted_df, chr_num)
 melted_df$chr_num <- factor(melted_df$chr_num, labels=c(paste0("chr", 1:length(chroms))))
 melted_df <- drop_na(melted_df)
+save(melted_df, file="supp_recomb/recomb_map_meltdf.Rdata")
+
+} else {
+load("supp_recomb/recomb_map_meltdf.Rdata")
+}
+
 p <- ggplot(melted_df, aes(x=gen_pos, y=count)) + geom_bar(stat='identity') + 
-     facet_wrap(~chr_num, nrow=floor(length(chroms)/4), scales="free_x", shrink = FALSE, labeller=label_parsed) + 
+     facet_wrap(~chr_num, nrow=floor(22/4), scales="free_x", shrink = FALSE, labeller=label_parsed) + 
      theme_bw() + theme(panel.background = element_blank(), panel.grid = element_blank()) + 
      xlab("Genomic position") + ylab("Inferred number of crossovers") + 
      theme(axis.text.x = element_text(angle=50, vjust=1, hjust = 1)) + theme(text = element_text(size=10))
