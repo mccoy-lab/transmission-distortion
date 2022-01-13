@@ -26,29 +26,29 @@ followed by one of the following
 ### Fig 2
 
 * [`plotting/plot_rhapsodi_main_gen_fig.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_rhapsodi_main_gen_fig.R)
-  <!--* Rdata files for streamlined plotting in `plotting/main_heatmap_rdata`-->
+  * Rdata files for streamlined plotting in [`plotting/main_heatmap_rdata`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/main_heatmap_Rdata)
 
 ### Fig 2 Supplemental Fig 2
 
 * [`plotting/plot_rhapsodi_supp_gen_fig.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_rhapsodi_supp_gen_fig.R)
-  <!--* Rdata files for streamlined plotting in `plotting/supp_heatmap_rdata`-->
+  * Rdata files for streamlined plotting in [`plotting/supp_heatmap_rdata`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/supp_heatmap_Rdata)
 
 ### Fig 2 Supplemental Fig 3
 
 Making of Rdata files from
 * [`sim-scripts/save_true_nsnp_vals.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/save_true_nsnp_vals.R)
-  <!--* Rdata file in `test_data_rhapsodi_gen`-->
+  * Rdata file in [`test_data_rhapsodi_gen`](https://github.com/mccoy-lab/transmission-distortion/tree/master/test_data_rhapsodi_gen)
 * [`plotting/supp_recomb/plot_supfig3_recombination_info.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/supp_recomb/plot_supfig3_recombination_info.R)
-  <!--* Rdata files saved in `plotting/supfig3_rdata` and later used by actual plotting scripts-->
+  * Rdata files saved in [`plotting/supfig3_rdata`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/supfig3_rdata) and later used by actual plotting scripts
 
 Plotting itself
 * [`plotting/supp_recomb/plot_bp_res.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/supp_recomb/plot_bp_res.R) and [`plotting/supp_recomb/plot_supfig3_recomb_fn_fp.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/supp_recomb/plot_supfig3_recomb_fn_fp.R)
-  <!--* Rdata files for streamlined plotting in `plotting/recomb_rdata`-->
+  * Rdata files for streamlined plotting in [`plotting/supp_recomb`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/supp_recomb)
 
 ### Fig 2 Supplemental Fig 4 - 7
 
 * [`plotting/robustness/plot_rhapsodi_robust_fig.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/robustness/plot_rhapsodi_robust_fig.R)
-  <!--* Rdata files for streamlined plotting in `plotting/robust_heatmaps_rdata`-->
+  * Rdata files for streamlined plotting in [`plotting/robustness`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/robustness)
 
 # Results: Benchmarking against existing methods
 
@@ -90,7 +90,7 @@ Plotting itself
 ### Fig 4 Supplemental Fig 3
 
 * [`plotting/plot_recombination_map.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_recombination_map.R)
-  <!-- * Rdata files for streamlined plotting in `plotting/recomb_rdata` -->
+  * Rdata files for streamlined plotting in [`plotting/supp_recomb`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/supp_recomb)
 
 ### Fig 4 Supplemental Fig 4
 
