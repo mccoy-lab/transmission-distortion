@@ -1,11 +1,15 @@
 # A method for investigating transmission distortion among human sperm
 
+This repository includes the analyses performed for the study "Strict adherence to Mendel's First Law across a large sample of human sperm genomes". This study is currently [posted on bioRxiv](https://www.biorxiv.org/content/10.1101/2021.11.19.469261v2)
+
+<!--
 - filtering_bell_data: info for filtering our Bell data based on genome consortia studies
 - full_donors: data from Bell et al. 2020
 - plotting: scripts for figures  
 - shell-scripts: command line scripts for processing raw data  
 - sim-scripts: R files for simulations of TD (real and simulated chromosomes)
 - sperm-data: steps for processing genotype data
+-->
 
 # Results: Evaluating performance on simulated data
 
@@ -20,6 +24,10 @@ followed by one of the following
 * [`sim-scripts/assess_with_rhapsodi.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi.R) run by [`sim-scripts/run_assess_with_rhapsodi.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi.sh) or [`sim-scripts/run_assess_with_rhapsodi_2args.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_2args.sh)
 * [`sim-scripts/assess_with_rhapsodi_thread_arg.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi_thread_arg.R) run by [`sim-scripts/run_assess_with_rhapsodi_thread_arg.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_thread_arg.sh)
 * [`sim-scripts/assess_with_rhapsodi_mparams.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi_mparams.R) run by [`sim-scripts/run_assess_with_rhapsodi_mparams.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_mparams.sh)
+
+## Stats reported in text
+
+* [`get_sim_stats.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/get_sim_stats.R)
 
 ## Plotting
 
@@ -67,6 +75,7 @@ Plotting itself
 
 ## Data Generation
 
+* [`sperm-data/subset_data.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_data.R) run by [`sperm-data/subset_bash.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_bash.sh)
 * [`filter_rhapsodi_TDscan.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/filter_rhapsodi_TDscan.R) run by [`slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/slurm_filter_rhapsodi_TDscan.sh) and [`submit_slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/submit_slurm_filter_rhapsodi_TDscan.sh)
 
 ## Stats reported in text
@@ -83,6 +92,8 @@ Plotting itself
 
 ### Fig 4
 
+* [`plotting/manhattan_all_donors_11052021.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/manhattan_all_donors_11052021.R)
+
 ### Fig 4 Supplemental Fig 2
 
 * [`plotting/TD_sim_plotting.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/TD_sim_plotting.R)
@@ -94,17 +105,23 @@ Plotting itself
 
 ### Fig 4 Supplemental Fig 4
 
+* [`plotting/power_analysis.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/power_analysis.R)
+
 ### Fig 4 Supplemental Fig 5
+
+* [`plotting/identify_segmental_dups.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/identify_segmental_dups.R)
 
 # Results: No global signal of biased transmission in human sperm
 
 ## Data Generation
 
+* [`run_plink/make_ped_file.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/make_ped_file.R) run by [`run_plink/submit_slurm_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/submit_slurm_make_ped.sh) calling [`run_plink/slurm_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/slurm_make_ped.sh) and [`run_plink/slurm_inf_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/slurm_inf_make_ped.sh)
+<!--* [`plink/run_plink.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plink/run_plink.sh) OR [`run_plink/run_plink.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/run_plink.sh)-->
 * [`get_snps_prune.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/get_snps_prune.R)
 * [`sim-scripts/null_sim.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/null_sim.R) run by [`sim-scripts/sim_wrapper.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/sim_wrapper.sh)
 
 ## Plotting
 
 ### Fig 5
-
-* [`plotting/plot_global_sims.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_global_sims.R)
+<!--* Panel A: [`plotting/TD_plot_qq_tile.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/TD_plot_qq_tile.R) OR [`plotting/qqplot.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/qqplot.R) NOTE both use the two original and infertile separate runs; I don't see an obvious difference between the two-->
+* Panel B: [`plotting/plot_global_sims.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_global_sims.R)
