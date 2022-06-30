@@ -96,12 +96,12 @@ paternal_map_wa <- paternal_map %>%
 merged_df <- edit_df(melted_df, merge_bool = TRUE, to_merge = paternal_map_wa)
 save(merged_df, file="supp_recomb/recomb_map_decodecomp_merged_df.Rdata")
 merged_df_donor <- edit_df(melted_df_donor, merge_bool = TRUE, to_merge = paternal_map_wa)
-save(merged_df_donor, file="supp_recomb/recomb_map_decodecomp_merged_df.Rdata")
+save(merged_df_donor, file="supp_recomb/recomb_map_decodecomp_merged_donor_df.Rdata")
 
 } else {
 load("supp_recomb/recomb_map_meltdf.Rdata")
 load("supp_recomb/recomb_map_decodecomp_merged_df.Rdata")
-load("supp_recomb/recomb_map_decodecomp_merged_df.Rdata")
+load("supp_recomb/recomb_map_decodecomp_merged_donor_df.Rdata")
 }
 
 p <- ggplot(melted_df, aes(x=gen_pos, y=count)) + geom_bar(stat='identity') +
@@ -117,7 +117,7 @@ p2 <- ggplot(merged_df, aes(x=rate, y = count)) + geom_point(alpha = 0.5) +
   xlab("Published male-specific recombination rate (cM/Mb)") + ylab("Inferred number of crossovers per genomic bin from Sperm-seq") +
   stat_cor()
 
-ggsave("plots/decode_comparison.pdf", plot=p2)
+ggsave("plots/decode_comparison.pdf", plot=p2, height=5.75, width=5.75, units="in")
 
 p3 <- ggplot(merged_df_donor, aes(x=rate, y = count)) + geom_point(alpha=0.5) +
   theme_bw() + theme(panel.background = element_blank(), panel.grid = element_blank()) +
@@ -125,7 +125,8 @@ p3 <- ggplot(merged_df_donor, aes(x=rate, y = count)) + geom_point(alpha=0.5) +
   stat_cor() +
   facet_wrap(~donor, nrow=5, scales="free_x", shrink = FALSE)
 
-ggsave("plots/decode_comparison_facetdonor.pdf", plot=p3)
+#do I need to change/simplify the sample labels at all?
+ggsave("plots/decode_comparison_facetdonor.pdf", plot=p3, height=6.5, width=10, units="in")
 
 bins_to_color <- read.csv("/home/kweave23/scr16_rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/filtered_data_specific_first_last_bins.csv", row.names =1) %>% `colnames<-`(c("bin", "freq", "color", "chr"))
 merged_df <- merged_df %>% mutate(across(chr, gsub, pattern="chr", replacement = ""))
@@ -135,25 +136,27 @@ merged_df <- merge(merged_df, bins_to_color, by =c("chr", "bin"), all = TRUE) %>
 p4 <- ggplot(merged_df, aes(x=rate, y=count, color=color)) + geom_point(alpha=0.5) +
   theme_bw() + theme(panel.background = element_blank(), panel.grid = element_blank()) +
   xlab("Published male-specific recombination rate (cM/Mb)") + ylab("Inferred number of crossovers per genomic bin from Sperm-seq") +
-  scale_color_manual(name = 'chromosome  bin', values = c("black", "purple", "blue"), labels = c('not first or last bin', 'first bin', 'last bin')) +
+  scale_color_manual(name = 'Chromosome bin', values = c("black", "purple", "blue"), labels = c('Not first or last bin', 'First bin', 'Last bin')) +
   stat_cor()
 
-ggsave("plots/decode_comparison_binloccolor.pdf", plot=p4)
+ggsave("plots/decode_comparison_binloccolor.pdf", plot=p4, height=5.75, width=7.75, units="in")
 
 p5 <- ggplot(merged_df, aes(x=rate, y=count, color=color, size=freq)) + geom_point(alpha=0.5) +
   theme_bw() + theme(panel.background = element_blank(), panel.grid = element_blank()) +
   xlab("Published male-specific recombination rate (cM/Mb)") + ylab("Inferred number of crossovers per genomic bin from Sperm-seq") +
-  scale_color_manual(name = 'chromosome  bin', values = c("black", "purple", "blue"), labels = c('not first or last bin', 'first bin', 'last bin'))
+  scale_color_manual(name = 'Chromosome bin', values = c("black", "purple", "blue"), labels = c('Not first or last bin', 'First bin', 'Last bin')) +
+  labs(size = "Frequency")
 
-ggsave("plots/decode_comparison_binloccolorfreqsize.pdf", plot=p5)
+ggsave("plots/decode_comparison_binloccolorfreqsize.pdf", plot=p5, height=5.75, width=7.75, units="in")
 
-correlations_donorspeconly <- unlist(lapply(1:length(donors), function(x) cor.test(merged_df_donor[which(merged_df_donor$donor == donors[x]), "rate"], merged_df_donor[which(merged_df_donor$donor == donors[x]), "count"])$estimate))
-cor_dspec_df <- data.frame(donor = donors, pearson_cor = correlations_donorspeconly)
+donor_genomewide_stats <- read.csv("/home/kweave23/scr16_rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/genomewide_donor_ngam_nsnp_meancov.csv", row.names=1)
 
-foranovadonorspec <- full_join(donor_meta_df %>% group_by(donor, fertility) %>% summarize(avgcov = mean(cov)) %>% select(donor, fertility, avgcov), cor_dspec_df, by = "donor") %>%
+correlations_donorspeconly <- unlist(lapply(1:nrow(donor_genomewide_stats), function(x) cor.test(merged_df_donor[which(merged_df_donor$donor == donor_genomewide_stats$donor[x]), "rate"], merged_df_donor[which(merged_df_donor$donor == donor_genomewide_stats$donor[x]), "count"])$estimate))
+cor_dspec_df <- data.frame(donor = donor_genomewide_stats$donor, pearson_cor = correlations_donorspeconly)
+
+foranovadonorspec <- full_join(donor_genomewide_stats, cor_dspec_df, by = "donor") %>%
   mutate(pearson_cor = as.numeric(pearson_cor)) %>%
-  mutate(fertility = as.factor(fertility)) %>%
-  mutate(avgcov = as.numeric(avgcov))
+  mutate(cov = as.numeric(cov))
 
-resdspec <- lm(pearson_cor ~ fertility + avgcov, data = foranovadonorspec)
+resdspec <- lm(pearson_cor ~ cov, data = foranovadonorspec)
 summary(resdspec)
