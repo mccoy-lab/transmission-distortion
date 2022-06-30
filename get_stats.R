@@ -9,10 +9,12 @@ read_files <- function(file_name){
 
 #SAMPLE SPECIFIC
 flist_sample_meta <- list.files("/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/",
-                                "_sample_meta.csv", 
+                                "_sample_meta.csv",
                                 full.names = TRUE, recursive = TRUE)
 
 dt_sample_meta <- rbindlist(pblapply(1:length(flist_sample_meta), function(x) read_files(flist_sample_meta[x])))
+
+write.csv(dt_sample_meta, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/donor_chrom_meta_dt.csv")
 
 ##number of SNPs
 total_snps <- sum(dt_sample_meta$nsnp_in)
@@ -34,10 +36,12 @@ sd_phase_com <- sd(dt_sample_meta$phasing_com) * 100 #0.1573844
 
 #GAMETE SPECIFIC
 flist_gamete_meta <- list.files("/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/",
-                                "_gamete_meta.csv", 
+                                "_gamete_meta.csv",
                                 full.names = TRUE, recursive = TRUE)
 
 dt_gamete_meta <- rbindlist(pblapply(1:length(flist_gamete_meta), function(x) read_files(flist_gamete_meta[x])))
+
+write.csv(dt_gamete_meta, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/gamete_meta_dt.csv")
 
 ##input COM and cov
 mean_input_com <- mean(dt_gamete_meta$input_com) * 100 #1.146296
@@ -58,21 +62,38 @@ recomb_summary_by_gamete <- group_by(dt_gamete_meta, donor, gamete) %>%
   as.data.table() %>%
   setorder(tot_crossovers)
 
-recomb_summary_across_gametes <- table(recomb_summary_by_gamete$tot_crossovers) %>% 
+write.csv(recomb_summary_by_gamete, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/gamete_recomb_dt.csv")
+
+recomb_summary_across_gametes <- table(recomb_summary_by_gamete$tot_crossovers) %>%
   as.data.table() %>%
   setnames(., c("genome_wide_crossovers", "n_gametes")) %>%
   setorder(., -n_gametes)
 recomb_summary_across_gametes[, genome_wide_crossovers := as.numeric(genome_wide_crossovers)]
 
+write.csv(recomb_summary_across_gametes, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/gamete_gw_recomb_dt.csv")
+
 mode_genome_wide <- recomb_summary_across_gametes$genome_wide_crossovers[1] #24
 
 flist_recomb_meta <- list.files("/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/",
-                                "_recomb_res.csv", 
+                                "_recomb_res.csv",
                                 full.names = TRUE, recursive = TRUE)
 
 dt_recomb_meta <- rbindlist(pblapply(1:length(flist_recomb_meta), function(x) read_files(flist_recomb_meta[x])))
+
+write.csv(dt_recomb_meta, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/recomb_res.csv")
 
 ##breakpoint resolution
 mean_res <- mean(dt_recomb_meta$res) #663582.7
 sd_res <- sd(dt_recomb_meta$res) #1254802
 median_res <- median(dt_recomb_meta$res) #357381
+
+gmdt <- dt_gamete_meta %>% group_by(donor, chrom) %>% summarise(meancov = mean(input_approx_cov))
+
+dcgsc <- full_join(dt_sample_meta, gmdt, by=("donor", "chrom")) %>% select(donor, chrom, ngam, nsnp_segdup, meancov) %>% `colnames<-`(c("donor", "chrom", "ngam", "n_snp", "cov"))
+write.csv(dcgsc, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/donor_ngam_nsnp_meancov.csv")
+
+gwgmc <- dt_gamete_meta %>% group_by(donor) %>% summarise(genomemeancov = mean(input_approx_cov))
+
+gwgmdt <- dt_sample_meta %>% group_by(donor) %>% summarise(mean_ngam = as.integer(mean(ngam)), mean_nsnp = as.integer(mean(nsnp_segdup)))
+gwdcgsc <- full_join(gwgmdt, gwgmc, by="donor") %>% `colnames<-`(c("donor", "ngam", "n_snp", "cov"))
+write.csv(gwdcgsc, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/genomewide_donor_ngam_nsnp_meancov.csv")
