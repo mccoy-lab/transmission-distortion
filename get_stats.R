@@ -89,11 +89,16 @@ median_res <- median(dt_recomb_meta$res) #357381
 
 gmdt <- dt_gamete_meta %>% group_by(donor, chrom) %>% summarise(meancov = mean(input_approx_cov))
 
-dcgsc <- full_join(dt_sample_meta, gmdt, by=("donor", "chrom")) %>% select(donor, chrom, ngam, nsnp_segdup, meancov) %>% `colnames<-`(c("donor", "chrom", "ngam", "n_snp", "cov"))
+dcgsc <- full_join(dt_sample_meta, gmdt, by=c("donor", "chrom")) %>% select(donor, chrom, ngam, nsnp_segdup, meancov) %>% `colnames<-`(c("donor", "chrom", "ngam", "n_snp", "cov"))
 write.csv(dcgsc, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/donor_ngam_nsnp_meancov.csv")
 
 gwgmc <- dt_gamete_meta %>% group_by(donor) %>% summarise(genomemeancov = mean(input_approx_cov))
 
 gwgmdt <- dt_sample_meta %>% group_by(donor) %>% summarise(mean_ngam = as.integer(mean(ngam)), mean_nsnp = as.integer(mean(nsnp_segdup)))
 gwdcgsc <- full_join(gwgmdt, gwgmc, by="donor") %>% `colnames<-`(c("donor", "ngam", "n_snp", "cov"))
+mincov <- gwdcgsc[which.min(gwdcgsc$cov),] #  donor ngam n_snp     cov
+                                           #1  ff3a 3373 57173 0.00239
+maxcov <- gwdcgsc[which.max(gwdcgsc$cov),] #   donor ngam n_snp    cov
+                                           #25  pb4a 2230 61629 0.0303
+avgcov <- mean(gwdcgsc$cov) #0.01187476
 write.csv(gwdcgsc, file = "/scratch/groups/rmccoy22/kweave23/sc_transmission_distortion/runworkflow_20211105/genomewide_donor_ngam_nsnp_meancov.csv")
