@@ -80,7 +80,7 @@ Plot
 ### Data generation
 
 * [`sperm-data/subset_data.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_data.R) run by [`sperm-data/subset_bash.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_bash.sh)
-* [`filter_rhapsodi_TDscan.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/filter_rhapsodi_TDscan.R) run by [`slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/slurm_filter_rhapsodi_TDscan.sh) and [`submit_slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/submit_slurm_filter_rhapsodi_TDscan.sh)
+* [`sperm-data/filter_rhapsodi_TDscan.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/filter_rhapsodi_TDscan.R) run by [`sperm-data/slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/slurm_filter_rhapsodi_TDscan.sh) and [`sperm-data/submit_slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/submit_slurm_filter_rhapsodi_TDscan.sh)
 
 ### Statistics reported in text
 
@@ -106,7 +106,6 @@ Plot
 * [`plotting/power_analyses/informative_transmissions_TDT.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/TD_sim_plotting.R)
 
 
-
 ## Strict adherence to Mendelian expectations across sperm genomes
 
 ### Data generation
@@ -121,7 +120,7 @@ Plot
 
 #### Fig 5S2
 
-* ??
+* 
 
 #### Fig 5S3
 
@@ -131,7 +130,6 @@ Plot
 
 * [`plotting/plot_recombination_map.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_recombination_map.R)
 * Rdata files for streamlined plotting in [`plotting/supp_recomb`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/supp_recomb)
-
 
 
 ## No global signal of biased transmission in human sperm
