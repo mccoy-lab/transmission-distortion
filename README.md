@@ -3,11 +3,12 @@
 This repository contains the analyses performed for the study "A method for low-coverage single-gamete sequence analysis demonstrates adherence to Mendel’s first law across a large sample of human sperm". This paper has been publised in [eLife](https://elifesciences.org/articles/76383).
 
 <!--
-- filtering_bell_data: info for filtering our Bell data based on genome consortia studies
-- plotting: scripts for figures  
-- shell-scripts: command line scripts for processing raw data  
-- sim-scripts: R files for simulations of TD (real and simulated chromosomes)
-- sperm-data: steps for processing genotype data
+- analysis scripts: scripts used for data in paper 
+-- filtering_bell_data: info for filtering our Bell data based on genome consortia studies
+-- shell-scripts: command line scripts for processing raw data  
+-- sim-scripts: R files for simulations of TD (real and simulated chromosomes)
+-- sperm-data: steps for processing genotype data
+- plotting: scripts for figures  in paper 
 -->
 
 # Results
@@ -18,13 +19,13 @@ This repository contains the analyses performed for the study "A method for low-
 
 For each different combination of study design:
 
-* [`sim-scripts/generative_model_for_rhapsodi.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/generative_model_for_rhapsodi.R) run by [`sim-scripts/run_genModel.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_genModel.sh) or [`sim-scripts/run_genModel_3args.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_genModel_3args.sh)
+* [`analysis_scripts/sim-scripts/generative_model_for_rhapsodi.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/generative_model_for_rhapsodi.R) run by [`analysis_scripts/sim-scripts/run_genModel.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_genModel.sh) or [`analysis_scripts/sim-scripts/run_genModel_3args.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_genModel_3args.sh)
 
 Followed by one of the following:
 
-* [`sim-scripts/assess_with_rhapsodi.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi.R) run by [`sim-scripts/run_assess_with_rhapsodi.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi.sh) or [`sim-scripts/run_assess_with_rhapsodi_2args.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_2args.sh)
-* [`sim-scripts/assess_with_rhapsodi_thread_arg.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi_thread_arg.R) run by [`sim-scripts/run_assess_with_rhapsodi_thread_arg.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_thread_arg.sh)
-* [`sim-scripts/assess_with_rhapsodi_mparams.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi_mparams.R) run by [`sim-scripts/run_assess_with_rhapsodi_mparams.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_mparams.sh)
+* [`analysis_scripts/sim-scripts/assess_with_rhapsodi.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi.R) run by [`analysis_scripts/sim-scripts/run_assess_with_rhapsodi.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi.sh) or [`analysis_scripts/sim-scripts/run_assess_with_rhapsodi_2args.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_2args.sh)
+* [`analysis_scripts/sim-scripts/assess_with_rhapsodi_thread_arg.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi_thread_arg.R) run by [`analysis_scripts/sim-scripts/run_assess_with_rhapsodi_thread_arg.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_thread_arg.sh)
+* [`analysis_scripts/sim-scripts/assess_with_rhapsodi_mparams.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/assess_with_rhapsodi_mparams.R) run by [`analysis_scripts/sim-scripts/run_assess_with_rhapsodi_mparams.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_assess_with_rhapsodi_mparams.sh)
 
 ### Statstics reported in text
 
@@ -45,8 +46,8 @@ Followed by one of the following:
 #### Fig 2 Supplemental Fig 3
 
 Make Rdata files 
-* [`sim-scripts/save_true_nsnp_vals.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/save_true_nsnp_vals.R)
-  * Rdata file in [`test_data_rhapsodi_gen`](https://github.com/mccoy-lab/transmission-distortion/tree/master/test_data_rhapsodi_gen)
+* [`analysis_scripts/sim-scripts/save_true_nsnp_vals.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/save_true_nsnp_vals.R)
+  * Rdata file in [`rhapsodi_scripts/test_data_rhapsodi_gen`](https://github.com/mccoy-lab/transmission-distortion/tree/master/test_data_rhapsodi_gen)
 * [`plotting/supp_recomb/plot_supfig3_recombination_info.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/supp_recomb/plot_supfig3_recombination_info.R)
   * Rdata files [`plotting/supfig3_rdata`](https://github.com/mccoy-lab/transmission-distortion/tree/master/plotting/supfig3_rdata) 
 
@@ -78,8 +79,8 @@ Plot
 
 ### Data generation
 
-* [`sperm-data/subset_data.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_data.R) run by [`sperm-data/subset_bash.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_bash.sh)
-* [`sperm-data/filter_rhapsodi_TDscan.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/filter_rhapsodi_TDscan.R) run by [`sperm-data/slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/slurm_filter_rhapsodi_TDscan.sh) and [`sperm-data/submit_slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/submit_slurm_filter_rhapsodi_TDscan.sh)
+* [`analysis_scripts/sperm-data/subset_data.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_data.R) run by [`analysis_scripts/sperm-data/subset_bash.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sperm-data/subset_bash.sh)
+* [`analysis_scripts/sperm-data/filter_rhapsodi_TDscan.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/filter_rhapsodi_TDscan.R) run by [`analysis_scripts/sperm-data/slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/slurm_filter_rhapsodi_TDscan.sh) and [`analysis_scripts/sperm-data/submit_slurm_filter_rhapsodi_TDscan.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/submit_slurm_filter_rhapsodi_TDscan.sh)
 
 ### Statistics reported in text
 
@@ -135,10 +136,10 @@ Plot
 
 ### Data generation
 
-* [`run_plink/make_ped_file.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/make_ped_file.R) run by [`run_plink/submit_slurm_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/submit_slurm_make_ped.sh) calling [`run_plink/slurm_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/slurm_make_ped.sh) and [`run_plink/slurm_inf_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/slurm_inf_make_ped.sh)
+* [`analysis_scripts/run_plink/make_ped_file.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/make_ped_file.R) run by [`analysis_scripts/run_plink/submit_slurm_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/submit_slurm_make_ped.sh) calling [`analysis_scripts/run_plink/slurm_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/slurm_make_ped.sh) and [`analysis_scripts/run_plink/slurm_inf_make_ped.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/slurm_inf_make_ped.sh)
 <!--* [`plink/run_plink.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plink/run_plink.sh) OR [`run_plink/run_plink.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/run_plink/run_plink.sh)-->
 * [`analysis_scripts/get_snps_prune.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/analysis_scripts/get_snps_prune.R)
-* [`sim-scripts/null_sim.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/null_sim.R) run by [`sim-scripts/sim_wrapper.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/sim_wrapper.sh)
+* [`analysis_scripts/sim-scripts/null_sim.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/null_sim.R) run by [`sim-scripts/sim_wrapper.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/sim_wrapper.sh)
 
 ### Plotting
 
@@ -146,6 +147,3 @@ Plot
 * Panel A: [`plotting/qqplot.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/qqplot.R) 
 * Panel B: [`plotting/plot_global_sims.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/plotting/plot_global_sims.R)
 
-TEST
-TEST
-TEST
