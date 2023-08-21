@@ -1,15 +1,9 @@
 # A method for investigating transmission distortion among human sperm
 
-This repository contains the analyses performed for the study "A method for low-coverage single-gamete sequence analysis demonstrates adherence to Mendel’s first law across a large sample of human sperm". This paper has been publised in [eLife](https://elifesciences.org/articles/76383)
-
-<!--
-- filtering_bell_data: info for filtering our Bell data based on genome consortia studies
-- full_donors: data from Bell et al. 2020
-- plotting: scripts for figures  
-- shell-scripts: command line scripts for processing raw data  
-- sim-scripts: R files for simulations of TD (real and simulated chromosomes)
-- sperm-data: steps for processing genotype data
--->
+TEST
+TEST
+TEST
+TEST
 
 # Results
 
@@ -17,9 +11,22 @@ This repository contains the analyses performed for the study "A method for low-
 
 ### Data generation
 
-For each different combination of study design:
-
-* [`sim-scripts/generative_model_for_rhapsodi.R`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/generative_model_for_rhapsodi.R) run by [`sim-scripts/run_genModel.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_genModel.sh) or [`sim-scripts/run_genModel_3args.sh`](https://github.com/mccoy-lab/transmission-distortion/blob/master/sim-scripts/run_genModel_3args.sh)
+TEST
+TEST
+TEST
+TESTTEST
+TEST
+TEST
+TESTTEST
+TEST
+TEST
+TESTTEST
+TEST
+TEST
+TESTTEST
+TEST
+TEST
+TEST
 
 Followed by one of the following:
 
