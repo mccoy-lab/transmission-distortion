@@ -1,6 +1,6 @@
 # A method for investigating transmission distortion among human sperm
 
-This repository contains the analyses performed for the study "A method for low-coverage single-gamete sequence analysis demonstrates adherence to Mendel’s first law across a large sample of human sperm". This paper has been publised in [eLife](https://elifesciences.org/articles/76383).
+This repository contains the analyses performed for the study "A method for low-coverage single-gamete sequence analysis demonstrates adherence to Mendel’s first law across a large sample of human sperm". This paper is published in [eLife](https://elifesciences.org/articles/76383).
 
 <!--
 - analysis scripts: scripts used for data in paper 
